@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@a309fa6e53e99073ff7a8a6f2e4224e64e6c9f40 # v6.0.1
+        with:
+          python-version: "3.13"
+
+      - name: Compile integration
+        run: python -m compileall -q custom_components/nodalia
+
+      - name: Run unit and repository tests
+        run: |
+          python -m unittest discover -s tests/python -p 'test_*.py'
+          python -m unittest discover -s tests -p 'test_repository.py'
