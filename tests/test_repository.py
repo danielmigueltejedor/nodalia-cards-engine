@@ -24,7 +24,8 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(manifest["version"], "2.0.0-alpha.59")
         self.assertTrue(manifest["config_flow"])
         self.assertEqual(manifest["dependencies"], [])
-        self.assertTrue((COMPONENT / "strings.json").exists())
+        self.assertTrue((COMPONENT / "translations" / "en.json").exists())
+        self.assertFalse((COMPONENT / "strings.json").exists())
 
     def test_engine_does_not_bundle_or_register_frontend_files(self) -> None:
         self.assertFalse((COMPONENT / "frontend.py").exists())
@@ -38,6 +39,30 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(icon[:8], b"\x89PNG\r\n\x1a\n")
         width, height = struct.unpack(">II", icon[16:24])
         self.assertEqual((width, height), (256, 256))
+
+    def test_publication_contract_includes_license_and_required_validation(self) -> None:
+        self.assertIn("MIT License", (ROOT / "LICENSE").read_text(encoding="utf-8"))
+        self.assertIn(
+            "custom_components/nodalia/brand/icon.png",
+            (ROOT / "README.md").read_text(encoding="utf-8"),
+        )
+        hacs_workflow = (ROOT / ".github" / "workflows" / "hacs.yml").read_text(
+            encoding="utf-8"
+        )
+        hassfest_workflow = (
+            ROOT / ".github" / "workflows" / "hassfest.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("category: integration", hacs_workflow)
+        self.assertNotIn("ignore:", hacs_workflow)
+        self.assertIn("home-assistant/actions/hassfest@", hassfest_workflow)
+
+    def test_runtime_and_manifest_versions_stay_aligned(self) -> None:
+        manifest = json.loads((COMPONENT / "manifest.json").read_text(encoding="utf-8"))
+        const_source = (COMPONENT / "const.py").read_text(encoding="utf-8")
+        self.assertIn(
+            f'INTEGRATION_VERSION: Final = "{manifest["version"]}"',
+            const_source,
+        )
 
 
 if __name__ == "__main__":

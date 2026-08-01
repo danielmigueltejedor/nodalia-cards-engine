@@ -1,6 +1,6 @@
 test_notification:
   name: Test notification
-  description: Send a test through a configured Nodalia notification profile.
+  description: Send an administrator-only test through a configured Nodalia notification profile.
   fields:
     profile_id:
       name: Profile

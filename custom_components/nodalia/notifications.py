@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from copy import deepcopy
 from typing import Any
 
 from homeassistant.core import Event, HomeAssistant
@@ -43,11 +44,24 @@ class NodaliaNotificationManager:
     async def async_start(self) -> None:
         """Load profiles and start their shared indexed listener."""
         raw_profiles = self.storage.get_section("notifications")
-        self._profiles = {
-            self._normalize_profile_id(profile_id): normalize_profile(value)
-            for profile_id, value in raw_profiles.items()
-            if self._normalize_profile_id(profile_id)
-        }
+        profiles: dict[str, dict[str, Any]] = {}
+        watched: set[str] = set()
+        for profile_id, value in raw_profiles.items():
+            normalized_id = self._normalize_profile_id(profile_id)
+            if not normalized_id or len(profiles) >= MAX_NOTIFICATION_PROFILES:
+                continue
+            profile = normalize_profile(value)
+            candidate_watched = watched | watched_entities(profile)
+            if len(candidate_watched) > MAX_NOTIFICATION_WATCHED_ENTITIES:
+                _LOGGER.warning(
+                    "Nodalia skipped notification profile %s because the combined entity limit is %s",
+                    normalized_id,
+                    MAX_NOTIFICATION_WATCHED_ENTITIES,
+                )
+                continue
+            profiles[normalized_id] = profile
+            watched = candidate_watched
+        self._profiles = profiles
         self._rebuild_listener()
 
     async def async_stop(self) -> None:
@@ -63,7 +77,7 @@ class NodaliaNotificationManager:
 
     def get_profile(self, profile_id: str = DEFAULT_NOTIFICATION_PROFILE) -> dict[str, Any] | None:
         profile = self._profiles.get(self._normalize_profile_id(profile_id))
-        return dict(profile) if profile is not None else None
+        return deepcopy(profile) if profile is not None else None
 
     async def async_set_profile(self, profile_id: str, raw_profile: Any) -> dict[str, Any]:
         """Validate, persist and activate one notification profile."""
@@ -73,17 +87,22 @@ class NodaliaNotificationManager:
         if normalized_id not in self._profiles and len(self._profiles) >= MAX_NOTIFICATION_PROFILES:
             raise ValueError(f"At most {MAX_NOTIFICATION_PROFILES} notification profiles are supported")
         profile = normalize_profile(raw_profile)
-        watched = watched_entities(profile)
-        if len(watched) > MAX_NOTIFICATION_WATCHED_ENTITIES:
+        candidate_profiles = dict(self._profiles)
+        candidate_profiles[normalized_id] = profile
+        combined_watched = set().union(
+            *(watched_entities(candidate) for candidate in candidate_profiles.values())
+        )
+        if len(combined_watched) > MAX_NOTIFICATION_WATCHED_ENTITIES:
             raise ValueError(
-                f"Notification profile watches {len(watched)} entities; maximum is {MAX_NOTIFICATION_WATCHED_ENTITIES}"
+                f"Notification profiles watch {len(combined_watched)} entities; "
+                f"combined maximum is {MAX_NOTIFICATION_WATCHED_ENTITIES}"
             )
         if self._profiles.get(normalized_id) == profile:
-            return dict(profile)
+            return deepcopy(profile)
         self._profiles[normalized_id] = profile
         await self.storage.async_set("notifications", normalized_id, profile)
         self._rebuild_listener()
-        return dict(profile)
+        return deepcopy(profile)
 
     async def async_delete_profile(self, profile_id: str) -> bool:
         normalized_id = self._normalize_profile_id(profile_id)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from copy import deepcopy
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -58,7 +59,7 @@ class NodaliaClimateManager:
 
     def get_schedule(self, entity_id: str) -> dict[str, Any] | None:
         schedule = self._schedules.get(str(entity_id or "").strip())
-        return dict(schedule) if schedule is not None else None
+        return deepcopy(schedule) if schedule is not None else None
 
     async def async_set_schedule(self, entity_id: str, raw_schedule: Any) -> dict[str, Any]:
         entity = str(entity_id or "").strip()
@@ -72,7 +73,7 @@ class NodaliaClimateManager:
         if self._started:
             await self._async_apply_schedule(schedule)
             self._reschedule()
-        return dict(schedule)
+        return deepcopy(schedule)
 
     async def async_delete_schedule(self, entity_id: str) -> bool:
         entity = str(entity_id or "").strip()
@@ -85,6 +86,10 @@ class NodaliaClimateManager:
 
     def diagnostics(self) -> dict[str, Any]:
         now = dt_util.now()
+        next_starts = {
+            entity_id: next_slot_start(schedule, now)
+            for entity_id, schedule in self._schedules.items()
+        }
         return {
             "schedule_count": len(self._schedules),
             "schedules": {
@@ -92,11 +97,9 @@ class NodaliaClimateManager:
                     "enabled": schedule.get("enabled") is not False,
                     "slot_count": len(schedule.get("slots", [])),
                     "active_slot": (active_slot(schedule, now) or {}).get("id"),
-                    "next_start": (
-                        next_slot_start(schedule, now).isoformat()
-                        if next_slot_start(schedule, now) is not None
-                        else None
-                    ),
+                    "next_start": next_starts[entity_id].isoformat()
+                    if next_starts[entity_id] is not None
+                    else None,
                 }
                 for entity_id, schedule in self._schedules.items()
             },

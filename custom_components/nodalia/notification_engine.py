@@ -48,6 +48,17 @@ ENTITY_GROUP_KINDS = {
     "ink": "ink",
 }
 
+MAX_SMART_RULES = 64
+MAX_ENTITY_OVERRIDES = 512
+MAX_CUSTOM_RULES = 100
+MAX_ENTITY_ID_LENGTH = 255
+MAX_RULE_ID_LENGTH = 100
+MAX_ATTRIBUTE_LENGTH = 128
+MAX_CONDITION_LENGTH = 32
+MAX_EXPECTED_VALUE_LENGTH = 255
+MAX_TITLE_LENGTH = 160
+MAX_MESSAGE_LENGTH = 2000
+
 
 def _mapping(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
@@ -77,6 +88,11 @@ def _number(value: Any, fallback: float) -> float:
         return float(text)
     except (TypeError, ValueError):
         return fallback
+
+
+def _text(value: Any, limit: int, fallback: str = "") -> str:
+    """Normalize one persisted text value and cap its storage footprint."""
+    return str(value or fallback).strip()[:limit]
 
 
 def optional_number(value: Any) -> float | None:
@@ -111,41 +127,44 @@ def normalize_profile(raw: Any) -> dict[str, Any]:
     entities["outdoor_humidity"] = _strings(entities_source.get("outdoor_humidity"))
 
     smart: dict[str, dict[str, str]] = {}
-    for key, value in _mapping(source.get("smart")).items():
+    for key, value in list(_mapping(source.get("smart")).items())[:MAX_SMART_RULES]:
         row = _mapping(value)
-        smart[str(key)] = {
-            "title": str(row.get("title") or "").strip(),
-            "message": str(row.get("message") or "").strip(),
+        rule_key = _text(key, MAX_RULE_ID_LENGTH)
+        if not rule_key:
+            continue
+        smart[rule_key] = {
+            "title": _text(row.get("title"), MAX_TITLE_LENGTH),
+            "message": _text(row.get("message"), MAX_MESSAGE_LENGTH),
             "mobile": normalize_mobile_policy(row.get("mobile")),
         }
 
     overrides: dict[str, dict[str, str]] = {}
-    for entity_id, value in _mapping(source.get("overrides")).items():
-        entity = str(entity_id or "").strip()
+    for entity_id, value in list(_mapping(source.get("overrides")).items())[:MAX_ENTITY_OVERRIDES]:
+        entity = _text(entity_id, MAX_ENTITY_ID_LENGTH)
         if not entity:
             continue
         row = _mapping(value)
         overrides[entity] = {
-            "title": str(row.get("title") or "").strip(),
-            "message": str(row.get("message") or "").strip(),
+            "title": _text(row.get("title"), MAX_TITLE_LENGTH),
+            "message": _text(row.get("message"), MAX_MESSAGE_LENGTH),
             "mobile": normalize_mobile_policy(row.get("mobile"), allow_inherit=True),
         }
 
     custom: list[dict[str, Any]] = []
-    for index, value in enumerate(_rows(source.get("custom"))[:100]):
+    for index, value in enumerate(_rows(source.get("custom"))[:MAX_CUSTOM_RULES]):
         row = _mapping(value)
-        entity = str(row.get("entity") or "").strip()
+        entity = _text(row.get("entity"), MAX_ENTITY_ID_LENGTH)
         if not entity:
             continue
         custom.append(
             {
-                "id": str(row.get("id") or f"custom-{index}").strip(),
+                "id": _text(row.get("id"), MAX_RULE_ID_LENGTH, f"custom-{index}"),
                 "entity": entity,
-                "attribute": str(row.get("attribute") or "").strip(),
-                "condition": str(row.get("condition") or "changed").strip().lower(),
-                "value": str(row.get("value") or "").strip(),
-                "title": str(row.get("title") or "Notification").strip(),
-                "message": str(row.get("message") or "{name}: {value}").strip(),
+                "attribute": _text(row.get("attribute"), MAX_ATTRIBUTE_LENGTH),
+                "condition": _text(row.get("condition"), MAX_CONDITION_LENGTH, "changed").lower(),
+                "value": _text(row.get("value"), MAX_EXPECTED_VALUE_LENGTH),
+                "title": _text(row.get("title"), MAX_TITLE_LENGTH, "Notification"),
+                "message": _text(row.get("message"), MAX_MESSAGE_LENGTH, "{name}: {value}"),
                 "severity": normalize_severity(row.get("severity")),
                 "mobile": normalize_mobile_policy(row.get("mobile")),
             }
@@ -165,7 +184,7 @@ def normalize_profile(raw: Any) -> dict[str, Any]:
             "group_similar": notify_source.get("group_similar") is not False,
         },
         "context": {
-            "presence_entity": str(context_source.get("presence_entity") or "").strip(),
+            "presence_entity": _text(context_source.get("presence_entity"), MAX_ENTITY_ID_LENGTH),
             "only_when_away": context_source.get("only_when_away") is True,
             "only_when_home": context_source.get("only_when_home") is True,
             "quiet_hours": {

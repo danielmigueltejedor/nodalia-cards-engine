@@ -6,7 +6,7 @@ import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 
@@ -32,6 +32,12 @@ async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
         domain_data[DATA_WEBSOCKET_REGISTERED] = True
 
     async def async_test_notification(call: ServiceCall) -> None:
+        if call.context.user_id is not None:
+            user = await hass.auth.async_get_user(call.context.user_id)
+            if user is None or not user.is_admin:
+                raise ServiceValidationError(
+                    "Only Home Assistant administrators can send Nodalia test notifications"
+                )
         runtime = hass.data.get(DOMAIN, {}).get(DATA_RUNTIME)
         if not isinstance(runtime, NodaliaRuntime) or not runtime.started:
             raise HomeAssistantError("Nodalia is not configured or loaded")

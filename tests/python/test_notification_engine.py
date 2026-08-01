@@ -66,6 +66,26 @@ class NotificationEngineTests(unittest.TestCase):
         profile = self._profile({"overrides": {"sensor.room_temperature": {"title": "Warm"}}})
         self.assertEqual(profile["overrides"]["sensor.room_temperature"]["mobile"], "inherit")
 
+    def test_untrusted_profile_text_and_collections_are_bounded(self) -> None:
+        profile = engine.normalize_profile({
+            "smart": {f"kind-{index}": {"message": "x" * 3000} for index in range(80)},
+            "overrides": {
+                f"sensor.entity_{index}": {"title": "y" * 300}
+                for index in range(520)
+            },
+            "custom": [{
+                "id": "z" * 200,
+                "entity": "sensor.custom",
+                "title": "t" * 300,
+                "message": "m" * 3000,
+            }],
+        })
+        self.assertEqual(len(profile["smart"]), engine.MAX_SMART_RULES)
+        self.assertEqual(len(profile["overrides"]), engine.MAX_ENTITY_OVERRIDES)
+        self.assertEqual(len(profile["custom"][0]["id"]), engine.MAX_RULE_ID_LENGTH)
+        self.assertEqual(len(profile["custom"][0]["title"]), engine.MAX_TITLE_LENGTH)
+        self.assertEqual(len(profile["custom"][0]["message"]), engine.MAX_MESSAGE_LENGTH)
+
 
 if __name__ == "__main__":
     unittest.main()
