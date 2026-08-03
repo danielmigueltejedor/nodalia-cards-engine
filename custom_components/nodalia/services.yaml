@@ -21,3 +21,30 @@ test_notification:
       selector:
         text:
           multiline: true
+
+send_external_alert:
+  name: Send external alert
+  description: Send one external alert that is already configured in a Nodalia notification profile.
+  fields:
+    profile_id:
+      name: Profile
+      required: false
+      default: default
+      selector:
+        text:
+    alert_id:
+      name: Alert
+      required: true
+      selector:
+        text:
+
+apply_climate_schedule:
+  name: Apply Climate schedule
+  description: Apply the currently active block of a stored Nodalia Climate schedule.
+  fields:
+    entity_id:
+      name: Climate entity
+      required: true
+      selector:
+        entity:
+          domain: climate

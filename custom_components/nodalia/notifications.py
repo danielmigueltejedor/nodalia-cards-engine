@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import json
 from collections.abc import Callable
 from copy import deepcopy
 from typing import Any
@@ -24,6 +25,8 @@ from .notification_engine import (
     is_within_quiet_hours,
     normalize_profile,
     passes_presence_context,
+    referenced_template_tokens,
+    resolve_alert_url,
     watched_entities,
 )
 from .storage import NodaliaStorage
@@ -156,6 +159,38 @@ class NodaliaNotificationManager:
             },
         )
 
+    async def async_send_external(self, profile_id: str, alert_id: str) -> int:
+        """Deliver one administrator-configured external alert by id."""
+        normalized_id = self._normalize_profile_id(profile_id)
+        profile = self._profiles.get(normalized_id)
+        if profile is None:
+            raise ValueError("Notification profile not found")
+        identity = str(alert_id or "").strip()
+        configured = next(
+            (
+                row
+                for row in profile.get("external_alerts", [])
+                if isinstance(row, dict) and str(row.get("id") or "") == identity
+            ),
+            None,
+        )
+        if configured is None:
+            raise ValueError("External alert not found in the notification profile")
+        entity_id = str(configured.get("entity") or "")
+        values = self._template_values(profile, entity_id)
+        alert = {
+            "id": f"external:{identity}",
+            "kind": str(configured.get("type") or "external_alert"),
+            "entity_id": entity_id,
+            "title": self._render(configured.get("title"), values),
+            "message": self._render(configured.get("message"), values),
+            "severity": str(configured.get("severity") or "info"),
+            "mobile": str(configured.get("mobile") or "auto"),
+            "url": resolve_alert_url(configured),
+            "action_label": str(configured.get("action_label") or ""),
+        }
+        return await self._async_deliver_if_allowed(normalized_id, profile, alert)
+
     def diagnostics(self) -> dict[str, Any]:
         return {
             "profile_count": len(self._profiles),
@@ -210,6 +245,7 @@ class NodaliaNotificationManager:
                 getattr(new_state, "state", None),
                 getattr(new_state, "attributes", None),
                 getattr(old_state, "attributes", None),
+                self._template_values(profile, entity_id),
             )
             for alert in alerts:
                 await self._async_deliver_if_allowed(profile_id, profile, alert)
@@ -263,21 +299,21 @@ class NodaliaNotificationManager:
         profile_id: str,
         profile: dict[str, Any],
         alert: dict[str, Any],
-    ) -> None:
+    ) -> int:
         if not delivery_allowed(profile, alert):
-            return
+            return 0
         now = dt_util.now()
         if is_within_quiet_hours(profile, now):
             quiet = profile.get("context", {}).get("quiet_hours", {})
             if alert.get("severity") != "critical" or quiet.get("allow_critical") is not True:
-                return
+                return 0
         context = profile.get("context", {})
         presence_entity = str(context.get("presence_entity") or "")
         presence_state = self.hass.states.get(presence_entity) if presence_entity else None
         if presence_entity and not passes_presence_context(profile, getattr(presence_state, "state", None)):
-            return
+            return 0
         if str(alert.get("id") or "") in self.dismissed(profile_id):
-            return
+            return 0
 
         notify = profile.get("notify", {})
         identity = cooldown_identity(profile, alert)
@@ -291,7 +327,7 @@ class NodaliaNotificationManager:
         now_timestamp = dt_util.utcnow().timestamp()
         last_timestamp = float(profile_cooldowns.get(identity) or 0)
         if cooldown_seconds > 0 and now_timestamp - last_timestamp < cooldown_seconds:
-            return
+            return 0
 
         delivered = await self._async_send(profile, alert)
         if delivered:
@@ -304,6 +340,7 @@ class NodaliaNotificationManager:
             }
             cooldown_root[profile_id] = profile_cooldowns
             self.storage.set_delayed("notification_runtime", "cooldowns", cooldown_root)
+        return delivered
 
     async def _async_send(self, profile: dict[str, Any], alert: dict[str, Any]) -> int:
         notify = profile.get("notify", {})
@@ -312,12 +349,28 @@ class NodaliaNotificationManager:
         if not message:
             return 0
         payload: dict[str, Any] = {"title": title, "message": message}
+        notification_data: dict[str, Any] = {}
+        alert_id = str(alert.get("id") or "").strip()[:240]
+        if alert_id:
+            notification_data["tag"] = f"nodalia:{alert_id}"
+        url = str(alert.get("url") or "").strip()[:2048]
+        if (
+            (url.startswith("/") and not url.startswith("//") and "\\" not in url)
+            or url.startswith(("https://", "http://"))
+        ):
+            notification_data["url"] = url
+            notification_data["clickAction"] = url
+            action_label = str(alert.get("action_label") or "").strip()[:100]
+            if action_label:
+                notification_data["actions"] = [{"action": "URI", "title": action_label, "uri": url}]
         if alert.get("severity") == "critical" and notify.get("critical_alerts") is True:
-            payload["data"] = {
+            notification_data.update({
                 "ttl": 0,
                 "priority": "high",
                 "push": {"sound": {"name": "default", "critical": 1, "volume": 1.0}},
-            }
+            })
+        if notification_data:
+            payload["data"] = notification_data
 
         delivered = 0
         modern_targets = []
@@ -359,3 +412,64 @@ class NodaliaNotificationManager:
             except HomeAssistantError as err:
                 _LOGGER.warning("Nodalia notification service %s failed: %s", service, err)
         return delivered
+
+    def _template_values(self, profile: dict[str, Any], source_entity_id: str) -> dict[str, str]:
+        """Resolve the card's bounded, non-executable placeholder language."""
+        values: dict[str, str] = {}
+        source = self.hass.states.get(source_entity_id)
+        if source is not None:
+            for key, value in source.attributes.items():
+                if isinstance(key, str) and len(key) <= 128:
+                    values[key] = self._stringify_template_value(value)
+            values["source"] = str(source.attributes.get("friendly_name") or source_entity_id)
+            values["state"] = str(source.state or "")
+            values["time"] = source.last_changed.astimezone().strftime("%H:%M")
+
+        for token in referenced_template_tokens(profile):
+            entity_id, separator, attribute = token.rpartition(".")
+            if not separator or "." not in entity_id:
+                entity_id, attribute = token, ""
+            state = self.hass.states.get(entity_id)
+            if state is None:
+                values[token] = ""
+                continue
+            if attribute == "state":
+                raw: Any = state.state
+            elif attribute:
+                raw = state.attributes.get(attribute)
+            else:
+                domain = entity_id.split(".", 1)[0]
+                if domain == "media_player":
+                    raw = state.attributes.get("friendly_name") or entity_id
+                elif domain == "calendar":
+                    raw = (
+                        state.attributes.get("message")
+                        or state.attributes.get("summary")
+                        or state.attributes.get("friendly_name")
+                        or state.state
+                    )
+                else:
+                    raw = state.state
+                    unit = str(state.attributes.get("unit_of_measurement") or "")
+                    if unit:
+                        raw = f"{raw}{unit}"
+            values[token] = self._stringify_template_value(raw)
+        return values
+
+    @staticmethod
+    def _render(template: Any, values: dict[str, str]) -> str:
+        rendered = str(template or "")
+        for key, value in values.items():
+            rendered = rendered.replace("{" + key + "}", value)
+        return rendered
+
+    @staticmethod
+    def _stringify_template_value(value: Any) -> str:
+        if value is None:
+            return ""
+        if isinstance(value, (dict, list)):
+            try:
+                return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+            except (TypeError, ValueError):
+                return str(value)
+        return str(value)

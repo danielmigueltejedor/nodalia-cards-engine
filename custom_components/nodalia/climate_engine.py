@@ -6,6 +6,7 @@ from datetime import date, datetime, time, timedelta
 from typing import Any
 
 DAY_KEYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+HVAC_MODES = {"off", "heat", "cool", "heat_cool", "auto", "dry", "fan_only"}
 
 
 def _mapping(value: Any) -> dict[str, Any]:
@@ -58,16 +59,30 @@ def normalize_schedule(entity_id: str, raw: Any, max_slots: int = 256) -> dict[s
         if start is None or end is None or not 5 <= temperature <= 40:
             continue
         slot_id = str(row.get("id") or f"slot-{index}").strip()[:100]
-        slots.append(
-            {
-                "id": slot_id,
-                "day": normalize_day(row.get("day"), index % 7),
-                "start": format_clock(start),
-                "end": format_clock(end),
-                "temperature": round(temperature, 2),
-                "enabled": row.get("enabled") is not False,
-            }
-        )
+        slot = {
+            "id": slot_id,
+            "day": normalize_day(row.get("day"), index % 7),
+            "start": format_clock(start),
+            "end": format_clock(end),
+            "temperature": round(temperature, 2),
+            "enabled": row.get("enabled") is not False,
+        }
+        hvac_mode = str(row.get("hvac_mode") or "").strip().lower()
+        if hvac_mode in HVAC_MODES:
+            slot["hvac_mode"] = hvac_mode
+        for key in ("fan_mode", "preset_mode"):
+            value = str(row.get(key) or "").strip()[:100]
+            if value:
+                slot[key] = value
+        try:
+            target_low = float(row.get("target_temp_low"))
+            target_high = float(row.get("target_temp_high"))
+        except (TypeError, ValueError):
+            target_low = target_high = 0
+        if 5 <= target_low <= target_high <= 40:
+            slot["target_temp_low"] = round(target_low, 2)
+            slot["target_temp_high"] = round(target_high, 2)
+        slots.append(slot)
     return {
         "version": 1,
         "entity_id": str(entity_id or "").strip(),

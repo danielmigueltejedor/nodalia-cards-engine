@@ -51,6 +51,37 @@ class ClimateEngineTests(unittest.TestCase):
         )
         self.assertEqual(schedule["slots"], [])
 
+    def test_schedule_preserves_optional_native_climate_controls(self) -> None:
+        schedule = engine.normalize_schedule(
+            "climate.salon",
+            {
+                "slots": [{
+                    "day": "mon",
+                    "start": "08:00",
+                    "end": "12:00",
+                    "temperature": 21,
+                    "hvac_mode": "heat",
+                    "fan_mode": "auto",
+                    "preset_mode": "comfort",
+                    "target_temp_low": 19,
+                    "target_temp_high": 23,
+                }],
+            },
+        )
+        slot = schedule["slots"][0]
+        self.assertEqual(slot["hvac_mode"], "heat")
+        self.assertEqual(slot["fan_mode"], "auto")
+        self.assertEqual(slot["preset_mode"], "comfort")
+        self.assertEqual(slot["target_temp_low"], 19)
+        self.assertEqual(slot["target_temp_high"], 23)
+
+    def test_unknown_hvac_mode_is_dropped(self) -> None:
+        schedule = engine.normalize_schedule(
+            "climate.salon",
+            {"slots": [{"day": "mon", "start": "08:00", "end": "12:00", "temperature": 21, "hvac_mode": "boost"}]},
+        )
+        self.assertNotIn("hvac_mode", schedule["slots"][0])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import re
 from typing import Any
 
 SEVERITY_SCORE = {"info": 1, "success": 2, "warning": 3, "critical": 4}
@@ -17,6 +18,9 @@ DEFAULT_THRESHOLDS = {
     "humidifier_fill_low": 20.0,
     "humidifier_fill_full": 90.0,
     "ink_low": 15.0,
+    "rain_probability": 50.0,
+    "rain_lookahead_hours": 6.0,
+    "media_absence_minutes": 10.0,
 }
 
 DEFAULT_COPY = {
@@ -47,6 +51,16 @@ ENTITY_GROUP_KINDS = {
     "humidifier_full": "humidifier_full",
     "ink": "ink",
 }
+CONTEXT_ENTITY_GROUPS = (
+    "calendar",
+    "fan",
+    "climate",
+    "humidifier",
+    "media_player",
+    "weather",
+    "outdoor_temperature",
+    "outdoor_humidity",
+)
 
 MAX_SMART_RULES = 64
 MAX_ENTITY_OVERRIDES = 512
@@ -58,6 +72,14 @@ MAX_CONDITION_LENGTH = 32
 MAX_EXPECTED_VALUE_LENGTH = 255
 MAX_TITLE_LENGTH = 160
 MAX_MESSAGE_LENGTH = 2000
+MAX_URL_LENGTH = 2048
+MAX_ACTION_LABEL_LENGTH = 100
+MAX_EXTERNAL_ALERTS = 100
+
+TEMPLATE_TOKEN_PATTERN = re.compile(r"\{([^{}]+)\}")
+TEMPLATE_ENTITY_PATTERN = re.compile(
+    r"^([a-zA-Z0-9_]+\.[a-zA-Z0-9_]+)(?:\.([a-zA-Z0-9_]+))?$"
+)
 
 
 def _mapping(value: Any) -> dict[str, Any]:
@@ -123,8 +145,8 @@ def normalize_profile(raw: Any) -> dict[str, Any]:
         key: _strings(entities_source.get(key))
         for key in ENTITY_GROUP_KINDS
     }
-    entities["outdoor_temperature"] = _strings(entities_source.get("outdoor_temperature"))
-    entities["outdoor_humidity"] = _strings(entities_source.get("outdoor_humidity"))
+    for key in CONTEXT_ENTITY_GROUPS:
+        entities[key] = _strings(entities_source.get(key))
 
     smart: dict[str, dict[str, str]] = {}
     for key, value in list(_mapping(source.get("smart")).items())[:MAX_SMART_RULES]:
@@ -136,6 +158,9 @@ def normalize_profile(raw: Any) -> dict[str, Any]:
             "title": _text(row.get("title"), MAX_TITLE_LENGTH),
             "message": _text(row.get("message"), MAX_MESSAGE_LENGTH),
             "mobile": normalize_mobile_policy(row.get("mobile")),
+            "url": _text(row.get("url"), MAX_URL_LENGTH),
+            "action_label": _text(row.get("action_label"), MAX_ACTION_LABEL_LENGTH),
+            "tap_action": normalize_tap_action(row.get("tap_action")),
         }
 
     overrides: dict[str, dict[str, str]] = {}
@@ -148,6 +173,9 @@ def normalize_profile(raw: Any) -> dict[str, Any]:
             "title": _text(row.get("title"), MAX_TITLE_LENGTH),
             "message": _text(row.get("message"), MAX_MESSAGE_LENGTH),
             "mobile": normalize_mobile_policy(row.get("mobile"), allow_inherit=True),
+            "url": _text(row.get("url"), MAX_URL_LENGTH),
+            "action_label": _text(row.get("action_label"), MAX_ACTION_LABEL_LENGTH),
+            "tap_action": normalize_tap_action(row.get("tap_action")),
         }
 
     custom: list[dict[str, Any]] = []
@@ -167,12 +195,40 @@ def normalize_profile(raw: Any) -> dict[str, Any]:
                 "message": _text(row.get("message"), MAX_MESSAGE_LENGTH, "{name}: {value}"),
                 "severity": normalize_severity(row.get("severity")),
                 "mobile": normalize_mobile_policy(row.get("mobile")),
+                "url": _text(row.get("url"), MAX_URL_LENGTH),
+                "action_label": _text(row.get("action_label"), MAX_ACTION_LABEL_LENGTH),
+                "tap_action": normalize_tap_action(row.get("tap_action")),
+            }
+        )
+
+    external_alerts: list[dict[str, Any]] = []
+    for value in _rows(source.get("external_alerts"))[:MAX_EXTERNAL_ALERTS]:
+        row = _mapping(value)
+        alert_id = _text(row.get("id"), MAX_RULE_ID_LENGTH)
+        if not alert_id:
+            continue
+        external_alerts.append(
+            {
+                "id": alert_id,
+                "type": _text(row.get("type"), MAX_CONDITION_LENGTH, "external_alert"),
+                "title": _text(row.get("title"), MAX_TITLE_LENGTH, "Notification"),
+                "message": _text(row.get("message"), MAX_MESSAGE_LENGTH),
+                "severity": normalize_severity(row.get("severity")),
+                "entity": _text(row.get("entity"), MAX_ENTITY_ID_LENGTH),
+                "source": _text(row.get("source"), MAX_TITLE_LENGTH),
+                "mobile": normalize_mobile_policy(row.get("mobile")),
+                "url": _text(row.get("url"), MAX_URL_LENGTH),
+                "action_label": _text(row.get("action_label"), MAX_ACTION_LABEL_LENGTH),
+                "tap_action": normalize_tap_action(row.get("tap_action")),
             }
         )
 
     return {
-        "version": 1,
+        "version": 2,
+        "source": _text(source.get("source"), 100, "nodalia-notifications-card"),
+        "card_version": _text(source.get("card_version"), 64),
         "enabled": source.get("enabled") is True,
+        "smart_recommendations": source.get("smart_recommendations") is not False,
         "notify": {
             "enabled": notify_source.get("enabled") is True,
             "entities": _strings(notify_source.get("entities"), 32),
@@ -196,10 +252,25 @@ def normalize_profile(raw: Any) -> dict[str, Any]:
         },
         "smart": smart,
         "custom": custom,
+        "external_alerts": external_alerts,
         "thresholds": thresholds,
         "entities": entities,
         "overrides": overrides,
     }
+
+
+def normalize_tap_action(value: Any) -> dict[str, Any]:
+    """Keep only navigation actions that mobile apps can execute safely."""
+    source = _mapping(value)
+    action = _text(source.get("action"), 32, "none").lower().replace("_", "-")
+    if action == "navigate":
+        path = _text(source.get("navigation_path"), MAX_URL_LENGTH)
+        return {"action": "navigate", "navigation_path": path} if _safe_url(path, local_only=True) else {"action": "none"}
+    if action == "url":
+        url = _text(source.get("url_path"), MAX_URL_LENGTH)
+        if _safe_url(url):
+            return {"action": "url", "url_path": url, "new_tab": source.get("new_tab") is True}
+    return {"action": "none"}
 
 
 def normalize_mobile_policy(value: Any, allow_inherit: bool = False) -> str:
@@ -236,8 +307,9 @@ def normalize_clock(value: Any, fallback: str) -> str:
 def watched_entities(profile: dict[str, Any]) -> set[str]:
     """Return the exact entities that need indexed state listeners."""
     watched: set[str] = set()
-    for rows in _mapping(profile.get("entities")).values():
-        watched.update(_strings(rows))
+    entity_groups = _mapping(profile.get("entities"))
+    for key in ENTITY_GROUP_KINDS:
+        watched.update(_strings(entity_groups.get(key)))
     for row in _rows(profile.get("custom")):
         entity = str(_mapping(row).get("entity") or "").strip()
         if entity:
@@ -245,7 +317,44 @@ def watched_entities(profile: dict[str, Any]) -> set[str]:
     presence = str(_mapping(profile.get("context")).get("presence_entity") or "").strip()
     if presence:
         watched.add(presence)
+    watched.update(referenced_template_entities(profile))
     return watched
+
+
+def referenced_template_entities(profile: dict[str, Any]) -> set[str]:
+    """Extract Home Assistant entity references used by safe placeholders."""
+    templates: list[str] = []
+    for section in ("smart", "overrides"):
+        for row in _mapping(profile.get(section)).values():
+            templates.extend((str(_mapping(row).get("title") or ""), str(_mapping(row).get("message") or "")))
+    for section in ("custom", "external_alerts"):
+        for row in _rows(profile.get(section)):
+            templates.extend((str(_mapping(row).get("title") or ""), str(_mapping(row).get("message") or "")))
+    entities: set[str] = set()
+    for template in templates:
+        for token in TEMPLATE_TOKEN_PATTERN.findall(template):
+            match = TEMPLATE_ENTITY_PATTERN.fullmatch(str(token).strip())
+            if match:
+                entities.add(match.group(1))
+    return entities
+
+
+def referenced_template_tokens(profile: dict[str, Any]) -> set[str]:
+    """Return exact entity placeholder tokens used by a profile."""
+    tokens: set[str] = set()
+    templates: list[str] = []
+    for section in ("smart", "overrides"):
+        for row in _mapping(profile.get(section)).values():
+            templates.extend((str(_mapping(row).get("title") or ""), str(_mapping(row).get("message") or "")))
+    for section in ("custom", "external_alerts"):
+        for row in _rows(profile.get(section)):
+            templates.extend((str(_mapping(row).get("title") or ""), str(_mapping(row).get("message") or "")))
+    for template in templates:
+        for token in TEMPLATE_TOKEN_PATTERN.findall(template):
+            normalized = str(token).strip()
+            if TEMPLATE_ENTITY_PATTERN.fullmatch(normalized):
+                tokens.add(normalized)
+    return tokens
 
 
 def is_within_quiet_hours(profile: dict[str, Any], now: datetime) -> bool:
@@ -272,6 +381,8 @@ def passes_presence_context(profile: dict[str, Any], presence_state: str | None)
     context = _mapping(profile.get("context"))
     if context.get("only_when_away") is not True and context.get("only_when_home") is not True:
         return True
+    if not str(context.get("presence_entity") or "").strip():
+        return True
     normalized = str(presence_state or "").strip().lower()
     if normalized in {"", "unknown", "unavailable", "none"}:
         return False
@@ -290,6 +401,7 @@ def evaluate_transition(
     new_value: Any,
     attributes: dict[str, Any] | None = None,
     old_attributes: dict[str, Any] | None = None,
+    template_values: dict[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     """Build zero or more backend alerts for one state transition."""
     attrs = _mapping(attributes)
@@ -319,8 +431,12 @@ def evaluate_transition(
                     friendly=friendly,
                     unit=unit,
                     custom=custom,
+                    template_values=template_values,
                 )
             )
+
+    if profile.get("smart_recommendations") is False:
+        return [alert for alert in alerts if alert_passes_minimum(profile, alert)]
 
     entities = _mapping(profile.get("entities"))
     thresholds = _mapping(profile.get("thresholds"))
@@ -366,6 +482,7 @@ def evaluate_transition(
                 value=new_value,
                 friendly=friendly,
                 unit=unit,
+                template_values=template_values,
             )
         )
     return [alert for alert in alerts if alert_passes_minimum(profile, alert)]
@@ -421,6 +538,7 @@ def build_alert(
     friendly: str,
     unit: str,
     custom: dict[str, Any] | None = None,
+    template_values: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     custom_row = _mapping(custom)
     default_title, default_message, default_severity = DEFAULT_COPY.get(
@@ -437,6 +555,7 @@ def build_alert(
     if override_policy != "inherit":
         policy = override_policy
     values = {
+        **(template_values or {}),
         "entity": entity_id,
         "entity_id": entity_id,
         "name": friendly,
@@ -455,7 +574,34 @@ def build_alert(
         "message": render_template(message, values),
         "severity": severity,
         "mobile": policy,
+        "url": resolve_alert_url(custom_row, override, smart),
+        "action_label": str(
+            custom_row.get("action_label")
+            or override.get("action_label")
+            or smart.get("action_label")
+            or ""
+        )[:MAX_ACTION_LABEL_LENGTH],
     }
+
+
+def resolve_alert_url(*sources: dict[str, Any]) -> str:
+    """Resolve the first safe dashboard or web URL from an alert policy."""
+    for source in sources:
+        row = _mapping(source)
+        tap_action = _mapping(row.get("tap_action"))
+        action = tap_action.get("action")
+        candidate = tap_action.get("navigation_path") if action == "navigate" else tap_action.get("url_path")
+        candidate = str(candidate or row.get("url") or "").strip()[:MAX_URL_LENGTH]
+        if _safe_url(candidate):
+            return candidate
+    return ""
+
+
+def _safe_url(value: Any, local_only: bool = False) -> bool:
+    candidate = str(value or "").strip()
+    if candidate.startswith("/") and not candidate.startswith("//") and "\\" not in candidate:
+        return True
+    return not local_only and candidate.startswith(("https://", "http://"))
 
 
 def render_template(template: str, values: dict[str, str]) -> str:

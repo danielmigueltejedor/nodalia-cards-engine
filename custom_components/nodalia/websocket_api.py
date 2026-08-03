@@ -9,7 +9,18 @@ import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant
 
-from .const import API_VERSION, CAPABILITIES, DATA_RUNTIME, DOMAIN, INTEGRATION_VERSION
+from .const import (
+    API_VERSION,
+    CAPABILITIES,
+    DATA_RUNTIME,
+    DOMAIN,
+    INTEGRATION_VERSION,
+    MAX_CLIMATE_SCHEDULES,
+    MAX_CLIMATE_SLOTS,
+    MAX_NOTIFICATION_PROFILES,
+    MAX_NOTIFICATION_TARGETS,
+    MAX_NOTIFICATION_WATCHED_ENTITIES,
+)
 from .runtime import NodaliaRuntime
 
 API_VERSION_FIELD = vol.Optional("api_version", default=API_VERSION)
@@ -38,8 +49,17 @@ async def websocket_status(hass, connection, msg) -> None:
         {
             "available": runtime is not None and runtime.started,
             "api_version": API_VERSION,
+            "api_min_version": API_VERSION,
+            "api_max_version": API_VERSION,
             "version": INTEGRATION_VERSION,
             "capabilities": [name for name, enabled in CAPABILITIES.items() if enabled],
+            "limits": {
+                "notification_profiles": MAX_NOTIFICATION_PROFILES,
+                "notification_targets_per_profile": MAX_NOTIFICATION_TARGETS,
+                "notification_watched_entities": MAX_NOTIFICATION_WATCHED_ENTITIES,
+                "climate_schedules": MAX_CLIMATE_SCHEDULES,
+                "climate_slots_per_schedule": MAX_CLIMATE_SLOTS,
+            },
         },
     )
 
@@ -163,6 +183,31 @@ async def websocket_notifications_test(hass, connection, msg) -> None:
 
 @websocket_api.websocket_command(
     {
+        vol.Required("type"): "nodalia/notifications/send_external",
+        API_VERSION_FIELD: vol.Coerce(int),
+        vol.Optional("profile_id", default="default"): str,
+        vol.Required("alert_id"): str,
+    }
+)
+@websocket_api.async_response
+async def websocket_notifications_send_external(hass, connection, msg) -> None:
+    connection.require_admin()
+    runtime = _runtime(hass)
+    if runtime is None:
+        _send_runtime_missing(connection, msg)
+        return
+    try:
+        delivered = await runtime.notifications.async_send_external(
+            msg.get("profile_id", "default"), msg["alert_id"]
+        )
+    except ValueError as err:
+        connection.send_error(msg["id"], "invalid_format", str(err))
+        return
+    connection.send_result(msg["id"], {"delivered": delivered})
+
+
+@websocket_api.websocket_command(
+    {
         vol.Required("type"): "nodalia/climate/schedule/get",
         API_VERSION_FIELD: vol.Coerce(int),
         vol.Required("entity_id"): str,
@@ -222,6 +267,28 @@ async def websocket_climate_schedule_delete(hass, connection, msg) -> None:
 
 
 @websocket_api.websocket_command(
+    {
+        vol.Required("type"): "nodalia/climate/schedule/apply",
+        API_VERSION_FIELD: vol.Coerce(int),
+        vol.Required("entity_id"): str,
+    }
+)
+@websocket_api.async_response
+async def websocket_climate_schedule_apply(hass, connection, msg) -> None:
+    connection.require_admin()
+    runtime = _runtime(hass)
+    if runtime is None:
+        _send_runtime_missing(connection, msg)
+        return
+    try:
+        applied = await runtime.climate.async_apply_schedule(msg["entity_id"])
+    except ValueError as err:
+        connection.send_error(msg["id"], "invalid_format", str(err))
+        return
+    connection.send_result(msg["id"], {"applied": applied})
+
+
+@websocket_api.websocket_command(
     {vol.Required("type"): "nodalia/diagnostics", API_VERSION_FIELD: vol.Coerce(int)}
 )
 @websocket_api.async_response
@@ -243,9 +310,11 @@ def async_register(hass: HomeAssistant) -> None:
         websocket_notifications_delete,
         websocket_notifications_dismiss,
         websocket_notifications_test,
+        websocket_notifications_send_external,
         websocket_climate_schedule_get,
         websocket_climate_schedule_set,
         websocket_climate_schedule_delete,
+        websocket_climate_schedule_apply,
         websocket_diagnostics,
     ):
         websocket_api.async_register_command(hass, command)

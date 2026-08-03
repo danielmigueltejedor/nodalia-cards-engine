@@ -21,11 +21,21 @@ class RepositoryTests(unittest.TestCase):
         self.assertNotIn("filename", hacs)
         self.assertEqual(manifest["domain"], "nodalia")
         self.assertEqual(manifest["name"], "Nodalia Cards Engine")
-        self.assertEqual(manifest["version"], "2.0.0-alpha.59")
+        self.assertEqual(manifest["version"], "2.0.0-alpha.60")
         self.assertTrue(manifest["config_flow"])
         self.assertEqual(manifest["dependencies"], [])
         self.assertTrue((COMPONENT / "translations" / "en.json").exists())
         self.assertFalse((COMPONENT / "strings.json").exists())
+
+        config_flow = (COMPONENT / "config_flow.py").read_text(encoding="utf-8")
+        self.assertIn(
+            "from homeassistant.config_entries import ConfigFlow, ConfigFlowResult",
+            config_flow,
+        )
+        self.assertNotIn(
+            "from homeassistant.data_entry_flow import ConfigFlowResult",
+            config_flow,
+        )
 
     def test_engine_does_not_bundle_or_register_frontend_files(self) -> None:
         self.assertFalse((COMPONENT / "frontend.py").exists())

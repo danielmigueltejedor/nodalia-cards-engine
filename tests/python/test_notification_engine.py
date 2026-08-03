@@ -86,6 +86,65 @@ class NotificationEngineTests(unittest.TestCase):
         self.assertEqual(len(profile["custom"][0]["title"]), engine.MAX_TITLE_LENGTH)
         self.assertEqual(len(profile["custom"][0]["message"]), engine.MAX_MESSAGE_LENGTH)
 
+    def test_profile_v2_keeps_safe_actions_external_alerts_and_template_entities(self) -> None:
+        profile = engine.normalize_profile({
+            "enabled": True,
+            "smart_recommendations": False,
+            "smart": {
+                "hot": {
+                    "title": "Warm {sensor.outdoor_temperature}",
+                    "tap_action": {"action": "navigate", "navigation_path": "/lovelace/climate"},
+                },
+            },
+            "custom": [{
+                "id": "door",
+                "entity": "binary_sensor.door",
+                "title": "At {sensor.outdoor_temperature}",
+                "tap_action": {"action": "url", "url_path": "https://example.com"},
+            }],
+            "external_alerts": [{"id": "camera", "title": "Camera", "mobile": "push"}],
+        })
+        self.assertEqual(profile["version"], 2)
+        self.assertFalse(profile["smart_recommendations"])
+        self.assertEqual(profile["smart"]["hot"]["tap_action"]["action"], "navigate")
+        self.assertEqual(profile["custom"][0]["tap_action"]["action"], "url")
+        self.assertEqual(profile["external_alerts"][0]["id"], "camera")
+        self.assertIn("sensor.outdoor_temperature", engine.watched_entities(profile))
+
+    def test_presence_constraint_without_entity_matches_card_fallback(self) -> None:
+        profile = engine.normalize_profile({
+            "context": {"only_when_away": True, "presence_entity": ""},
+        })
+        self.assertTrue(engine.passes_presence_context(profile, None))
+
+    def test_disabling_smart_recommendations_keeps_custom_rules_only(self) -> None:
+        profile = self._profile({
+            "smart_recommendations": False,
+            "custom": [{
+                "id": "temperature-change",
+                "entity": "sensor.room_temperature",
+                "condition": "changed",
+                "title": "Changed",
+                "message": "{sensor.outdoor_temperature}",
+                "mobile": "push",
+            }],
+        })
+        alerts = engine.evaluate_transition(
+            profile,
+            "sensor.room_temperature",
+            "26.9",
+            "27.1",
+            {},
+            {},
+            {"sensor.outdoor_temperature": "12°C"},
+        )
+        self.assertEqual([alert["kind"] for alert in alerts], ["custom"])
+        self.assertEqual(alerts[0]["message"], "12°C")
+
+    def test_protocol_relative_navigation_is_rejected(self) -> None:
+        action = engine.normalize_tap_action({"action": "navigate", "navigation_path": "//evil.example"})
+        self.assertEqual(action, {"action": "none"})
+
 
 if __name__ == "__main__":
     unittest.main()

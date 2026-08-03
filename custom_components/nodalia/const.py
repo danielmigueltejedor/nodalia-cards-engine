@@ -6,7 +6,7 @@ from typing import Final
 
 DOMAIN: Final = "nodalia"
 INTEGRATION_NAME: Final = "Nodalia Cards Engine"
-INTEGRATION_VERSION: Final = "2.0.0-alpha.59"
+INTEGRATION_VERSION: Final = "2.0.0-alpha.60"
 API_VERSION: Final = 1
 
 DATA_RUNTIME: Final = "runtime"
@@ -27,7 +27,12 @@ CAPABILITIES: Final = {
     "notifications": True,
     "notifications_background": True,
     "notifications_shared_dismissals": True,
+    "notifications_external_alerts": True,
+    "notifications_safe_templates": True,
+    "notifications_deep_links": True,
     "climate_schedules": True,
+    "climate_schedule_apply": True,
+    "climate_schedule_modes": True,
     "news_history": False,
     "vacuum_sessions": False,
     "frontend_bundle": False,
