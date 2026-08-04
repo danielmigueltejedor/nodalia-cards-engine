@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.0.0-alpha.64] - 2026-08-04
+
+### Fixed
+
+- Background and test delivery no longer pass `data` to `notify.send_message`, which Home Assistant 2026.7 rejects. Legacy `notify.<service>` calls still receive mobile `data` payloads.
+
 ## [2.0.0-alpha.63] - 2026-08-04
 
 ### Fixed

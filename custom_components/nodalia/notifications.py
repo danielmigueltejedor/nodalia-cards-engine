@@ -9,7 +9,6 @@ from copy import deepcopy
 from typing import Any
 
 from homeassistant.core import Event, HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.util import dt as dt_util
 
@@ -348,7 +347,9 @@ class NodaliaNotificationManager:
         message = str(alert.get("message") or "")[:2000]
         if not message:
             return 0
-        payload: dict[str, Any] = {"title": title, "message": message}
+        # Legacy notify.<service> accepts optional data; notify.send_message does not.
+        legacy_payload: dict[str, Any] = {"title": title, "message": message}
+        entity_payload: dict[str, Any] = {"title": title, "message": message}
         notification_data: dict[str, Any] = {}
         alert_id = str(alert.get("id") or "").strip()[:240]
         if alert_id:
@@ -370,7 +371,7 @@ class NodaliaNotificationManager:
                 "push": {"sound": {"name": "default", "critical": 1, "volume": 1.0}},
             })
         if notification_data:
-            payload["data"] = notification_data
+            legacy_payload["data"] = notification_data
 
         delivered = 0
         modern_targets = []
@@ -384,12 +385,12 @@ class NodaliaNotificationManager:
                     await self.hass.services.async_call(
                         "notify",
                         "send_message",
-                        payload,
+                        entity_payload,
                         blocking=True,
                         target={"entity_id": [target]},
                     )
                     delivered += 1
-                except HomeAssistantError as err:
+                except Exception as err:  # noqa: BLE001 - notify platforms raise mixed errors
                     _LOGGER.warning("Nodalia notification target %s failed: %s", target, err)
 
         seen_services: set[str] = set()
@@ -405,11 +406,11 @@ class NodaliaNotificationManager:
                 await self.hass.services.async_call(
                     "notify",
                     service_part,
-                    payload,
+                    legacy_payload,
                     blocking=True,
                 )
                 delivered += 1
-            except HomeAssistantError as err:
+            except Exception as err:  # noqa: BLE001 - notify platforms raise mixed errors
                 _LOGGER.warning("Nodalia notification service %s failed: %s", service, err)
         return delivered
 
