@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.0.0-alpha.61] - 2026-08-04
+
+### Fixed
+
+- Admin-gated WebSocket commands now use `@websocket_api.require_admin` instead of the non-existent `connection.require_admin()`, which caused `unknown_error` on Home Assistant 2026.7 when saving notification profiles or Climate schedules.
+
 ## [2.0.0-alpha.60] - 2026-08-04
 
 ### Fixed

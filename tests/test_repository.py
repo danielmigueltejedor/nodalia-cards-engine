@@ -21,7 +21,7 @@ class RepositoryTests(unittest.TestCase):
         self.assertNotIn("filename", hacs)
         self.assertEqual(manifest["domain"], "nodalia")
         self.assertEqual(manifest["name"], "Nodalia Cards Engine")
-        self.assertEqual(manifest["version"], "2.0.0-alpha.60")
+        self.assertEqual(manifest["version"], "2.0.0-alpha.61")
         self.assertTrue(manifest["config_flow"])
         self.assertEqual(manifest["dependencies"], [])
         self.assertTrue((COMPONENT / "translations" / "en.json").exists())
@@ -36,6 +36,10 @@ class RepositoryTests(unittest.TestCase):
             "from homeassistant.data_entry_flow import ConfigFlowResult",
             config_flow,
         )
+
+        websocket_api = (COMPONENT / "websocket_api.py").read_text(encoding="utf-8")
+        self.assertIn("@websocket_api.require_admin", websocket_api)
+        self.assertNotIn("connection.require_admin()", websocket_api)
 
     def test_engine_does_not_bundle_or_register_frontend_files(self) -> None:
         self.assertFalse((COMPONENT / "frontend.py").exists())

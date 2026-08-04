@@ -88,6 +88,7 @@ async def websocket_notifications_get(hass, connection, msg) -> None:
     )
 
 
+@websocket_api.require_admin
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "nodalia/notifications/set",
@@ -98,7 +99,6 @@ async def websocket_notifications_get(hass, connection, msg) -> None:
 )
 @websocket_api.async_response
 async def websocket_notifications_set(hass, connection, msg) -> None:
-    connection.require_admin()
     runtime = _runtime(hass)
     if runtime is None:
         _send_runtime_missing(connection, msg)
@@ -115,6 +115,7 @@ async def websocket_notifications_set(hass, connection, msg) -> None:
     )
 
 
+@websocket_api.require_admin
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "nodalia/notifications/delete",
@@ -124,7 +125,6 @@ async def websocket_notifications_set(hass, connection, msg) -> None:
 )
 @websocket_api.async_response
 async def websocket_notifications_delete(hass, connection, msg) -> None:
-    connection.require_admin()
     runtime = _runtime(hass)
     if runtime is None:
         _send_runtime_missing(connection, msg)
@@ -155,6 +155,7 @@ async def websocket_notifications_dismiss(hass, connection, msg) -> None:
     connection.send_result(msg["id"], {"dismissed": True})
 
 
+@websocket_api.require_admin
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "nodalia/notifications/test",
@@ -166,7 +167,6 @@ async def websocket_notifications_dismiss(hass, connection, msg) -> None:
 )
 @websocket_api.async_response
 async def websocket_notifications_test(hass, connection, msg) -> None:
-    connection.require_admin()
     runtime = _runtime(hass)
     if runtime is None:
         _send_runtime_missing(connection, msg)
@@ -181,6 +181,7 @@ async def websocket_notifications_test(hass, connection, msg) -> None:
     connection.send_result(msg["id"], {"delivered": delivered})
 
 
+@websocket_api.require_admin
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "nodalia/notifications/send_external",
@@ -191,7 +192,6 @@ async def websocket_notifications_test(hass, connection, msg) -> None:
 )
 @websocket_api.async_response
 async def websocket_notifications_send_external(hass, connection, msg) -> None:
-    connection.require_admin()
     runtime = _runtime(hass)
     if runtime is None:
         _send_runtime_missing(connection, msg)
@@ -225,6 +225,7 @@ async def websocket_climate_schedule_get(hass, connection, msg) -> None:
     )
 
 
+@websocket_api.require_admin
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "nodalia/climate/schedule/set",
@@ -235,7 +236,6 @@ async def websocket_climate_schedule_get(hass, connection, msg) -> None:
 )
 @websocket_api.async_response
 async def websocket_climate_schedule_set(hass, connection, msg) -> None:
-    connection.require_admin()
     runtime = _runtime(hass)
     if runtime is None:
         _send_runtime_missing(connection, msg)
@@ -248,6 +248,7 @@ async def websocket_climate_schedule_set(hass, connection, msg) -> None:
     connection.send_result(msg["id"], {"schedule": schedule})
 
 
+@websocket_api.require_admin
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "nodalia/climate/schedule/delete",
@@ -257,7 +258,6 @@ async def websocket_climate_schedule_set(hass, connection, msg) -> None:
 )
 @websocket_api.async_response
 async def websocket_climate_schedule_delete(hass, connection, msg) -> None:
-    connection.require_admin()
     runtime = _runtime(hass)
     if runtime is None:
         _send_runtime_missing(connection, msg)
@@ -266,6 +266,7 @@ async def websocket_climate_schedule_delete(hass, connection, msg) -> None:
     connection.send_result(msg["id"], {"deleted": deleted})
 
 
+@websocket_api.require_admin
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "nodalia/climate/schedule/apply",
@@ -275,7 +276,6 @@ async def websocket_climate_schedule_delete(hass, connection, msg) -> None:
 )
 @websocket_api.async_response
 async def websocket_climate_schedule_apply(hass, connection, msg) -> None:
-    connection.require_admin()
     runtime = _runtime(hass)
     if runtime is None:
         _send_runtime_missing(connection, msg)
@@ -288,12 +288,12 @@ async def websocket_climate_schedule_apply(hass, connection, msg) -> None:
     connection.send_result(msg["id"], {"applied": applied})
 
 
+@websocket_api.require_admin
 @websocket_api.websocket_command(
     {vol.Required("type"): "nodalia/diagnostics", API_VERSION_FIELD: vol.Coerce(int)}
 )
 @websocket_api.async_response
 async def websocket_diagnostics(hass, connection, msg) -> None:
-    connection.require_admin()
     runtime = _runtime(hass)
     if runtime is None:
         _send_runtime_missing(connection, msg)
