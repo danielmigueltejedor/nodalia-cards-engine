@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.0.0] - 2026-08-04
+
+First stable release of the independent Nodalia Cards Engine HACS Integration.
+
+Promotes the completed `2.0.0-alpha.59`–`2.0.0-alpha.65` cycle and starts Engine versioning at **`1.0.0`**, separate from the Nodalia Cards Dashboard plugin line.
+
+### Highlights
+
+- Background notification profiles with presence, quiet-hours, severity and cooldown policies.
+- Shared notification dismissals stored in Home Assistant.
+- Persistent weekly Climate schedules applied at native time boundaries.
+- Authenticated WebSocket bridge with capability negotiation for Nodalia Cards `2.0.2`+.
+- Localized default alert copy and percentage formatting aligned with the Notifications Card.
+- Compatible with Home Assistant `2025.1.0`+ (verified through `2026.7`).
+
+### Fixed since public alpha
+
+- Config flow handler import, admin WebSocket gating, Action UI service schemas and `notify.send_message` payload shape for HA 2026.7.
+- Background notification titles/messages follow the Home Assistant language and append `%` for percentage-like values when entities omit a unit.
+
 ## [2.0.0-alpha.65] - 2026-08-04
 
 ### Fixed

@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Security fixes are provided for the latest published release of Nodalia Cards Engine.
+Security fixes are provided for the latest stable release of Nodalia Cards Engine (`1.0.0` and newer).
 
 ## Reporting a vulnerability
 

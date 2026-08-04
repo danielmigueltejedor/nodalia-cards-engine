@@ -26,10 +26,10 @@ The cards remain installed through HACS as a **Dashboard** repository, so existi
 ## Compatibility
 
 - Home Assistant `2025.1.0` or newer.
-- Nodalia Cards `2.0.0-alpha.59` or newer for native Engine discovery (`2.0.2` or newer recommended).
+- Nodalia Cards `2.0.2` or newer for native Engine discovery (`2.0.3` recommended).
 - The Engine is optional: cards that do not use a server-side feature continue working without it.
 
-This repository is currently an alpha. Keep existing packages, automations and helpers until the corresponding profile or schedule has been verified on your Home Assistant instance.
+Stable **`1.0.0`** is the recommended Engine release. Keep existing packages, automations and helpers until the corresponding profile or schedule has been verified on your Home Assistant instance.
 
 ## Installation with HACS
 
