@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import voluptuous as vol
-
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
-from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 
 from .const import DATA_RUNTIME, DATA_WEBSOCKET_REGISTERED, DOMAIN
@@ -17,25 +14,6 @@ from .websocket_api import async_register as async_register_websocket
 SERVICE_TEST_NOTIFICATION = "test_notification"
 SERVICE_SEND_EXTERNAL_ALERT = "send_external_alert"
 SERVICE_APPLY_CLIMATE_SCHEDULE = "apply_climate_schedule"
-SERVICE_TEST_NOTIFICATION_SCHEMA = vol.Schema(
-    {
-        vol.Optional("profile_id", default="default"): cv.string,
-        vol.Optional("title", default="Nodalia"): cv.string,
-        vol.Optional("message", default="Background notifications are ready."): cv.string,
-    },
-    extra=vol.REMOVE_EXTRA,
-)
-SERVICE_SEND_EXTERNAL_ALERT_SCHEMA = vol.Schema(
-    {
-        vol.Optional("profile_id", default="default"): cv.string,
-        vol.Required("alert_id"): cv.string,
-    },
-    extra=vol.REMOVE_EXTRA,
-)
-SERVICE_APPLY_CLIMATE_SCHEDULE_SCHEMA = vol.Schema(
-    {vol.Required("entity_id"): cv.entity_domain("climate")},
-    extra=vol.REMOVE_EXTRA,
-)
 
 
 async def _async_require_admin(hass: HomeAssistant, call: ServiceCall) -> None:
@@ -53,18 +31,25 @@ def _runtime_or_raise(hass: HomeAssistant) -> NodaliaRuntime:
     return runtime
 
 
-async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
-    """Register global APIs and actions once."""
-    domain_data = hass.data.setdefault(DOMAIN, {})
-    if not domain_data.get(DATA_WEBSOCKET_REGISTERED):
-        async_register_websocket(hass)
-        domain_data[DATA_WEBSOCKET_REGISTERED] = True
+def _service_text(call: ServiceCall, key: str, default: str = "") -> str:
+    """Read one Action/UI field while ignoring nested null placeholders."""
+    value = call.data.get(key, default)
+    if value is None:
+        return default
+    return str(value).strip() or default
+
+
+@callback
+def _async_register_services(hass: HomeAssistant) -> None:
+    """Register or refresh actions so schema changes apply after updates."""
 
     async def async_test_notification(call: ServiceCall) -> None:
         await _async_require_admin(hass, call)
         runtime = _runtime_or_raise(hass)
         delivered = await runtime.notifications.async_send_test(
-            call.data["profile_id"], call.data["title"], call.data["message"]
+            _service_text(call, "profile_id", "default"),
+            _service_text(call, "title", "Nodalia"),
+            _service_text(call, "message", "Background notifications are ready."),
         )
         if delivered < 1:
             raise HomeAssistantError("No configured notification target accepted the test")
@@ -72,8 +57,12 @@ async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
     async def async_send_external_alert(call: ServiceCall) -> None:
         await _async_require_admin(hass, call)
         runtime = _runtime_or_raise(hass)
+        alert_id = _service_text(call, "alert_id")
+        if not alert_id:
+            raise ServiceValidationError("alert_id is required")
         delivered = await runtime.notifications.async_send_external(
-            call.data["profile_id"], call.data["alert_id"]
+            _service_text(call, "profile_id", "default"),
+            alert_id,
         )
         if delivered < 1:
             raise HomeAssistantError("The external alert was blocked by policy or had no available target")
@@ -81,31 +70,25 @@ async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
     async def async_apply_climate_schedule(call: ServiceCall) -> None:
         await _async_require_admin(hass, call)
         runtime = _runtime_or_raise(hass)
-        applied = await runtime.climate.async_apply_schedule(call.data["entity_id"])
+        entity_id = _service_text(call, "entity_id")
+        if not entity_id.startswith("climate."):
+            raise ServiceValidationError("entity_id must be a climate entity")
+        applied = await runtime.climate.async_apply_schedule(entity_id)
         if not applied:
             raise HomeAssistantError("No active Climate schedule slot could be applied")
 
-    if not hass.services.has_service(DOMAIN, SERVICE_TEST_NOTIFICATION):
-        hass.services.async_register(
-            DOMAIN,
-            SERVICE_TEST_NOTIFICATION,
-            async_test_notification,
-            schema=SERVICE_TEST_NOTIFICATION_SCHEMA,
-        )
-    if not hass.services.has_service(DOMAIN, SERVICE_SEND_EXTERNAL_ALERT):
-        hass.services.async_register(
-            DOMAIN,
-            SERVICE_SEND_EXTERNAL_ALERT,
-            async_send_external_alert,
-            schema=SERVICE_SEND_EXTERNAL_ALERT_SCHEMA,
-        )
-    if not hass.services.has_service(DOMAIN, SERVICE_APPLY_CLIMATE_SCHEDULE):
-        hass.services.async_register(
-            DOMAIN,
-            SERVICE_APPLY_CLIMATE_SCHEDULE,
-            async_apply_climate_schedule,
-            schema=SERVICE_APPLY_CLIMATE_SCHEDULE_SCHEMA,
-        )
+    hass.services.async_register(DOMAIN, SERVICE_TEST_NOTIFICATION, async_test_notification)
+    hass.services.async_register(DOMAIN, SERVICE_SEND_EXTERNAL_ALERT, async_send_external_alert)
+    hass.services.async_register(DOMAIN, SERVICE_APPLY_CLIMATE_SCHEDULE, async_apply_climate_schedule)
+
+
+async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
+    """Register global APIs and actions once."""
+    domain_data = hass.data.setdefault(DOMAIN, {})
+    if not domain_data.get(DATA_WEBSOCKET_REGISTERED):
+        async_register_websocket(hass)
+        domain_data[DATA_WEBSOCKET_REGISTERED] = True
+    _async_register_services(hass)
     return True
 
 
@@ -115,7 +98,8 @@ async def async_setup_entry(hass: HomeAssistant, _entry: ConfigEntry) -> bool:
     runtime = NodaliaRuntime(hass)
     await runtime.async_start()
     domain_data[DATA_RUNTIME] = runtime
-
+    # Refresh action handlers after HACS updates without requiring a second restart path.
+    _async_register_services(hass)
     return True
 
 

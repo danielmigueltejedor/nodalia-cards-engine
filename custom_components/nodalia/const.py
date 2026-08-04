@@ -6,7 +6,7 @@ from typing import Final
 
 DOMAIN: Final = "nodalia"
 INTEGRATION_NAME: Final = "Nodalia Cards Engine"
-INTEGRATION_VERSION: Final = "2.0.0-alpha.62"
+INTEGRATION_VERSION: Final = "2.0.0-alpha.63"
 API_VERSION: Final = 1
 
 DATA_RUNTIME: Final = "runtime"

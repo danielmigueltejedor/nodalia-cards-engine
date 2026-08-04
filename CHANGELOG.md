@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.0.0-alpha.63] - 2026-08-04
+
+### Fixed
+
+- `nodalia.test_notification` and the other actions no longer use a strict Voluptuous service schema, so the Home Assistant Actions UI `data: null` payload no longer blocks the call. Handlers re-register on config entry setup after updates.
+
 ## [2.0.0-alpha.62] - 2026-08-04
 
 ### Fixed
