@@ -37,7 +37,35 @@ class NotificationEngineTests(unittest.TestCase):
         alerts = engine.evaluate_transition(profile, "sensor.room_temperature", "26.9", "27.1", {"friendly_name": "Room", "unit_of_measurement": "°C"})
         self.assertEqual(len(alerts), 1)
         self.assertEqual(alerts[0]["kind"], "hot")
+        self.assertEqual(alerts[0]["title"], "High temperature")
+        self.assertIn("27.1°C", alerts[0]["message"])
         self.assertEqual(engine.evaluate_transition(profile, "sensor.room_temperature", "27.1", "28", {}), [])
+
+    def test_percent_kinds_default_unit_and_localized_copy(self) -> None:
+        profile = engine.normalize_profile({
+            "enabled": True,
+            "notify": {"enabled": True, "entities": ["notify.phone"], "min_severity": "info"},
+            "entities": {"ink": ["sensor.color_ink"]},
+            "thresholds": {"ink_low": 15},
+            "smart": {
+                "ink_low": {
+                    "title": "",
+                    "message": "Queda un {value} de tinta de color.",
+                    "mobile": "push",
+                }
+            },
+        })
+        alerts = engine.evaluate_transition(
+            profile,
+            "sensor.color_ink",
+            "18",
+            "10",
+            {"friendly_name": "Tinta color"},
+            language="es",
+        )
+        self.assertEqual(len(alerts), 1)
+        self.assertEqual(alerts[0]["title"], "Tinta baja")
+        self.assertEqual(alerts[0]["message"], "Queda un 10% de tinta de color.")
 
     def test_explicit_push_bypasses_minimum_severity(self) -> None:
         profile = self._profile({

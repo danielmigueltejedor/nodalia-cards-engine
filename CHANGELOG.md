@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.0.0-alpha.65] - 2026-08-04
+
+### Fixed
+
+- Background notification copy follows the Home Assistant language for default titles/messages and formats percentage-like values with `%` when the entity has no unit, matching the Notifications Card.
+
 ## [2.0.0-alpha.64] - 2026-08-04
 
 ### Fixed

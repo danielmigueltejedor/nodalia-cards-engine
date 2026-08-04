@@ -24,18 +24,101 @@ DEFAULT_THRESHOLDS = {
 }
 
 DEFAULT_COPY = {
-    "door": ("Door open", "{name} has been opened.", "warning"),
-    "window": ("Window open", "{name} has been opened.", "warning"),
-    "motion": ("Motion detected", "Motion detected by {name}.", "info"),
-    "vacuum": ("Vacuum needs attention", "{name}: {value}", "critical"),
-    "hot": ("High temperature", "{name} is at {value}{unit}.", "warning"),
-    "cold": ("Low temperature", "{name} is at {value}{unit}.", "info"),
-    "humidity_high": ("High humidity", "{name} is at {value}{unit}.", "warning"),
-    "humidity_low": ("Low humidity", "{name} is at {value}{unit}.", "warning"),
-    "battery_low": ("Low battery", "{name} is at {value}{unit}.", "warning"),
-    "humidifier_fill_low": ("Humidifier needs water", "{name} is at {value}{unit}.", "warning"),
-    "humidifier_fill_full": ("Humidifier tank full", "{name} is at {value}{unit}.", "warning"),
-    "ink_low": ("Low ink", "{name} is at {value}{unit}.", "warning"),
+    "door": ("Door open", "{source} has been opened.", "warning"),
+    "window": ("Window open", "{source} has been opened.", "warning"),
+    "motion": ("Motion detected", "Motion detected by {source}.", "info"),
+    "vacuum": ("Vacuum needs attention", "{source}: {value}", "critical"),
+    "hot": ("High temperature", "{source} is at {value}.", "warning"),
+    "cold": ("Low temperature", "{source} is at {value}.", "info"),
+    "humidity_high": ("High humidity", "{source} is at {value}.", "warning"),
+    "humidity_low": ("Low humidity", "{source} is at {value}.", "warning"),
+    "battery_low": ("Low battery", "{source} is at {value}.", "warning"),
+    "humidifier_fill_low": ("Humidifier needs water", "{source} is at {value}.", "warning"),
+    "humidifier_fill_full": ("Humidifier tank full", "{source} is at {value}.", "warning"),
+    "ink_low": ("Low ink", "{source} is at {value}.", "warning"),
+}
+
+# Keep titles/messages aligned with the Nodalia Cards runtime locales for background delivery.
+LOCALIZED_DEFAULT_COPY: dict[str, dict[str, tuple[str, str, str]]] = {
+    "es": {
+        "door": ("Puerta abierta", "{source} se ha abierto.", "warning"),
+        "window": ("Ventana abierta", "{source} se ha abierto.", "warning"),
+        "motion": ("Movimiento detectado", "Movimiento detectado por {source}.", "info"),
+        "vacuum": ("Robot necesita atención", "{source}: {value}", "critical"),
+        "hot": ("Hace calor", "{source} marca {value}.", "warning"),
+        "cold": ("Temperatura baja", "{source} marca {value}.", "info"),
+        "humidity_high": ("Humedad alta", "{source} está al {value}.", "warning"),
+        "humidity_low": ("Humedad baja", "{source} queda en {value}.", "warning"),
+        "battery_low": ("Batería baja", "{source} queda en {value}.", "warning"),
+        "humidifier_fill_low": ("Depósito bajo", "{source} queda en {value}.", "warning"),
+        "humidifier_fill_full": ("Depósito lleno", "{source} está al {value}.", "warning"),
+        "ink_low": ("Tinta baja", "{source} queda en {value}.", "warning"),
+    },
+    "pt": {
+        "door": ("Porta aberta", "{source} foi aberta.", "warning"),
+        "window": ("Janela aberta", "{source} foi aberta.", "warning"),
+        "motion": ("Movimento detetado", "Movimento detetado por {source}.", "info"),
+        "vacuum": ("Robô precisa de atenção", "{source}: {value}", "critical"),
+        "hot": ("Está quente", "{source} marca {value}.", "warning"),
+        "cold": ("Temperatura baixa", "{source} marca {value}.", "info"),
+        "humidity_high": ("Humidade alta", "{source} está em {value}.", "warning"),
+        "humidity_low": ("Humidade baixa", "{source} está em {value}.", "warning"),
+        "battery_low": ("Bateria fraca", "{source} está em {value}.", "warning"),
+        "humidifier_fill_low": ("Depósito baixo", "{source} está em {value}.", "warning"),
+        "humidifier_fill_full": ("Depósito cheio", "{source} está em {value}.", "warning"),
+        "ink_low": ("Pouca tinta", "{source} está em {value}.", "warning"),
+    },
+    "fr": {
+        "door": ("Porte ouverte", "{source} a été ouverte.", "warning"),
+        "window": ("Fenêtre ouverte", "{source} a été ouverte.", "warning"),
+        "motion": ("Mouvement détecté", "Mouvement détecté par {source}.", "info"),
+        "vacuum": ("Robot nécessite une attention", "{source}: {value}", "critical"),
+        "hot": ("Il fait chaud", "{source} indique {value}.", "warning"),
+        "cold": ("Température basse", "{source} indique {value}.", "info"),
+        "humidity_high": ("Humidité élevée", "{source} est à {value}.", "warning"),
+        "humidity_low": ("Humidité basse", "{source} est à {value}.", "warning"),
+        "battery_low": ("Batterie faible", "{source} est à {value}.", "warning"),
+        "humidifier_fill_low": ("Réservoir bas", "{source} est à {value}.", "warning"),
+        "humidifier_fill_full": ("Réservoir plein", "{source} est à {value}.", "warning"),
+        "ink_low": ("Encre faible", "{source} est à {value}.", "warning"),
+    },
+    "de": {
+        "door": ("Tür offen", "{source} wurde geöffnet.", "warning"),
+        "window": ("Fenster offen", "{source} wurde geöffnet.", "warning"),
+        "motion": ("Bewegung erkannt", "Bewegung erkannt von {source}.", "info"),
+        "vacuum": ("Roboter braucht Aufmerksamkeit", "{source}: {value}", "critical"),
+        "hot": ("Es ist heiß", "{source} zeigt {value}.", "warning"),
+        "cold": ("Niedrige Temperatur", "{source} zeigt {value}.", "info"),
+        "humidity_high": ("Hohe Luftfeuchtigkeit", "{source} liegt bei {value}.", "warning"),
+        "humidity_low": ("Niedrige Luftfeuchtigkeit", "{source} liegt bei {value}.", "warning"),
+        "battery_low": ("Niedriger Batteriestand", "{source} liegt bei {value}.", "warning"),
+        "humidifier_fill_low": ("Tank niedrig", "{source} liegt bei {value}.", "warning"),
+        "humidifier_fill_full": ("Tank voll", "{source} liegt bei {value}.", "warning"),
+        "ink_low": ("Wenig Tinte", "{source} liegt bei {value}.", "warning"),
+    },
+    "it": {
+        "door": ("Porta aperta", "{source} è stata aperta.", "warning"),
+        "window": ("Finestra aperta", "{source} è stata aperta.", "warning"),
+        "motion": ("Movimento rilevato", "Movimento rilevato da {source}.", "info"),
+        "vacuum": ("Il robot richiede attenzione", "{source}: {value}", "critical"),
+        "hot": ("Fa caldo", "{source} indica {value}.", "warning"),
+        "cold": ("Temperatura bassa", "{source} indica {value}.", "info"),
+        "humidity_high": ("Umidità alta", "{source} è a {value}.", "warning"),
+        "humidity_low": ("Umidità bassa", "{source} è a {value}.", "warning"),
+        "battery_low": ("Batteria scarica", "{source} è a {value}.", "warning"),
+        "humidifier_fill_low": ("Serbatoio basso", "{source} è a {value}.", "warning"),
+        "humidifier_fill_full": ("Serbatoio pieno", "{source} è a {value}.", "warning"),
+        "ink_low": ("Inchiostro basso", "{source} è a {value}.", "warning"),
+    },
+}
+
+PERCENT_KINDS = {
+    "humidity_high",
+    "humidity_low",
+    "battery_low",
+    "humidifier_fill_low",
+    "humidifier_fill_full",
+    "ink_low",
 }
 
 ENTITY_GROUP_KINDS = {
@@ -394,6 +477,41 @@ def passes_presence_context(profile: dict[str, Any], presence_state: str | None)
     return True
 
 
+def normalize_language(value: Any) -> str:
+    """Normalize Home Assistant language codes to a supported copy pack."""
+    language = str(value or "en").strip().lower().replace("_", "-")
+    if not language:
+        return "en"
+    if language in LOCALIZED_DEFAULT_COPY:
+        return language
+    primary = language.split("-", 1)[0]
+    return primary if primary in LOCALIZED_DEFAULT_COPY else "en"
+
+
+def default_copy_for(kind: str, language: str = "en") -> tuple[str, str, str]:
+    """Return localized fallback title/message/severity for one smart kind."""
+    pack = LOCALIZED_DEFAULT_COPY.get(normalize_language(language), {})
+    if kind in pack:
+        return pack[kind]
+    return DEFAULT_COPY.get(kind, ("Notification", "{source}: {value}", "info"))
+
+
+def format_measurement(value: Any, unit: str = "", *, kind: str = "") -> tuple[str, str]:
+    """Format a sensor reading the same way the Notifications Card does."""
+    resolved_unit = str(unit or "").strip()
+    if not resolved_unit and kind in PERCENT_KINDS:
+        resolved_unit = "%"
+    number = optional_number(value)
+    if number is None:
+        text = str(value if value is not None else "").strip()
+        return text, resolved_unit
+    if float(number).is_integer():
+        text = str(int(number))
+    else:
+        text = f"{number:.1f}".rstrip("0").rstrip(".")
+    return f"{text}{resolved_unit}", resolved_unit
+
+
 def evaluate_transition(
     profile: dict[str, Any],
     entity_id: str,
@@ -402,6 +520,7 @@ def evaluate_transition(
     attributes: dict[str, Any] | None = None,
     old_attributes: dict[str, Any] | None = None,
     template_values: dict[str, str] | None = None,
+    language: str = "en",
 ) -> list[dict[str, Any]]:
     """Build zero or more backend alerts for one state transition."""
     attrs = _mapping(attributes)
@@ -432,6 +551,7 @@ def evaluate_transition(
                     unit=unit,
                     custom=custom,
                     template_values=template_values,
+                    language=language,
                 )
             )
 
@@ -483,6 +603,7 @@ def evaluate_transition(
                 friendly=friendly,
                 unit=unit,
                 template_values=template_values,
+                language=language,
             )
         )
     return [alert for alert in alerts if alert_passes_minimum(profile, alert)]
@@ -539,11 +660,10 @@ def build_alert(
     unit: str,
     custom: dict[str, Any] | None = None,
     template_values: dict[str, str] | None = None,
+    language: str = "en",
 ) -> dict[str, Any]:
     custom_row = _mapping(custom)
-    default_title, default_message, default_severity = DEFAULT_COPY.get(
-        kind, ("Notification", "{name}: {value}", "info")
-    )
+    default_title, default_message, default_severity = default_copy_for(kind, language)
     smart = _mapping(_mapping(profile.get("smart")).get(kind))
     override = _mapping(_mapping(profile.get("overrides")).get(entity_id))
     title = str(custom_row.get("title") or override.get("title") or smart.get("title") or default_title)
@@ -554,15 +674,17 @@ def build_alert(
     override_policy = normalize_mobile_policy(override.get("mobile"), allow_inherit=True)
     if override_policy != "inherit":
         policy = override_policy
+    formatted_value, resolved_unit = format_measurement(value, unit, kind=kind)
     values = {
         **(template_values or {}),
         "entity": entity_id,
         "entity_id": entity_id,
         "name": friendly,
         "friendly": friendly,
-        "value": str(value if value is not None else ""),
-        "state": str(value if value is not None else ""),
-        "unit": unit,
+        "source": friendly,
+        "value": formatted_value,
+        "state": formatted_value,
+        "unit": resolved_unit,
         "kind": kind,
     }
     identity_suffix = str(custom_row.get("id") or entity_id)
