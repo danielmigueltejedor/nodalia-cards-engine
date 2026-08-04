@@ -22,16 +22,19 @@ SERVICE_TEST_NOTIFICATION_SCHEMA = vol.Schema(
         vol.Optional("profile_id", default="default"): cv.string,
         vol.Optional("title", default="Nodalia"): cv.string,
         vol.Optional("message", default="Background notifications are ready."): cv.string,
-    }
+    },
+    extra=vol.REMOVE_EXTRA,
 )
 SERVICE_SEND_EXTERNAL_ALERT_SCHEMA = vol.Schema(
     {
         vol.Optional("profile_id", default="default"): cv.string,
         vol.Required("alert_id"): cv.string,
-    }
+    },
+    extra=vol.REMOVE_EXTRA,
 )
 SERVICE_APPLY_CLIMATE_SCHEDULE_SCHEMA = vol.Schema(
-    {vol.Required("entity_id"): cv.entity_domain("climate")}
+    {vol.Required("entity_id"): cv.entity_domain("climate")},
+    extra=vol.REMOVE_EXTRA,
 )
 
 

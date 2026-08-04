@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.0.0-alpha.62] - 2026-08-04
+
+### Fixed
+
+- Service schemas strip unexpected Action UI keys such as `data: null`, so `nodalia.test_notification` no longer fails with `extra keys not allowed @ data['data']`.
+
 ## [2.0.0-alpha.61] - 2026-08-04
 
 ### Fixed
