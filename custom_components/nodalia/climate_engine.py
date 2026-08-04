@@ -43,6 +43,58 @@ def normalize_day(value: Any, fallback_index: int = 0) -> str:
     return DAY_KEYS[max(0, min(6, numeric))]
 
 
+def parse_until(value: Any) -> datetime | None:
+    """Parse an ISO 8601 override expiry, tolerating a trailing Z."""
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def normalize_override(raw: Any) -> dict[str, Any] | None:
+    """Validate a temporary manual override that wins over the weekly slots."""
+    source = _mapping(raw)
+    until = parse_until(source.get("until"))
+    if until is None:
+        return None
+    override: dict[str, Any] = {"until": until.isoformat()}
+    try:
+        temperature = float(source.get("temperature"))
+    except (TypeError, ValueError):
+        temperature = None
+    if temperature is not None and 5 <= temperature <= 40:
+        override["temperature"] = round(temperature, 2)
+    hvac_mode = str(source.get("hvac_mode") or "").strip().lower()
+    if hvac_mode in HVAC_MODES:
+        override["hvac_mode"] = hvac_mode
+    for key in ("fan_mode", "preset_mode"):
+        value = str(source.get(key) or "").strip()[:100]
+        if value:
+            override[key] = value
+    try:
+        target_low = float(source.get("target_temp_low"))
+        target_high = float(source.get("target_temp_high"))
+    except (TypeError, ValueError):
+        target_low = target_high = 0
+    if 5 <= target_low <= target_high <= 40:
+        override["target_temp_low"] = round(target_low, 2)
+        override["target_temp_high"] = round(target_high, 2)
+    return override
+
+
+def override_until(schedule: dict[str, Any], now: datetime) -> datetime | None:
+    """Return the override expiry aligned to the reference timezone, if any."""
+    override = normalize_override(_mapping(schedule).get("override"))
+    until = parse_until(override.get("until")) if override is not None else None
+    if until is None:
+        return None
+    # Overrides written without an offset are interpreted in Home Assistant's timezone.
+    return until if until.tzinfo is not None else until.replace(tzinfo=now.tzinfo)
+
+
 def normalize_schedule(entity_id: str, raw: Any, max_slots: int = 256) -> dict[str, Any]:
     """Validate the full, non-compressed schedule stored by the integration."""
     source = _mapping(raw)
@@ -83,13 +135,17 @@ def normalize_schedule(entity_id: str, raw: Any, max_slots: int = 256) -> dict[s
             slot["target_temp_low"] = round(target_low, 2)
             slot["target_temp_high"] = round(target_high, 2)
         slots.append(slot)
-    return {
+    schedule = {
         "version": 1,
         "entity_id": str(entity_id or "").strip(),
         "enabled": source.get("enabled") is not False,
         "week_starts_on": "sunday" if source.get("week_starts_on") == "sunday" else "monday",
         "slots": slots,
     }
+    override = normalize_override(source.get("override"))
+    if override is not None:
+        schedule["override"] = override
+    return schedule
 
 
 def active_slot(schedule: dict[str, Any], now: datetime) -> dict[str, Any] | None:
@@ -116,6 +172,26 @@ def active_slot(schedule: dict[str, Any], now: datetime) -> dict[str, Any] | Non
                 winner = slot
                 winner_start = start_at
     return dict(winner) if winner is not None else None
+
+
+def effective_slot(schedule: dict[str, Any], now: datetime) -> dict[str, Any] | None:
+    """Return the manual override as a slot while it lasts, else the weekly slot."""
+    until = override_until(schedule, now)
+    if until is not None and until > now:
+        override = normalize_override(_mapping(schedule).get("override")) or {}
+        slot = {key: value for key, value in override.items() if key != "until"}
+        slot.update({"id": "override", "enabled": True, "override": True, "until": override.get("until")})
+        return slot
+    return active_slot(schedule, now)
+
+
+def next_timer_at(schedule: dict[str, Any], now: datetime) -> datetime | None:
+    """Return the next moment this schedule needs re-evaluation."""
+    candidates = [candidate for candidate in (next_slot_start(schedule, now),) if candidate is not None]
+    until = override_until(schedule, now)
+    if until is not None and until > now:
+        candidates.append(until)
+    return min(candidates) if candidates else None
 
 
 def next_slot_start(schedule: dict[str, Any], now: datetime) -> datetime | None:

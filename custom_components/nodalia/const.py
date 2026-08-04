@@ -6,8 +6,10 @@ from typing import Final
 
 DOMAIN: Final = "nodalia"
 INTEGRATION_NAME: Final = "Nodalia Cards Engine"
-INTEGRATION_VERSION: Final = "1.0.0"
-API_VERSION: Final = 1
+INTEGRATION_VERSION: Final = "2.0.0"
+API_VERSION: Final = 2
+API_MIN_VERSION: Final = 1
+API_MAX_VERSION: Final = 2
 
 DATA_RUNTIME: Final = "runtime"
 DATA_WEBSOCKET_REGISTERED: Final = "websocket_registered"
@@ -22,6 +24,7 @@ MAX_NOTIFICATION_TARGETS: Final = 32
 MAX_NOTIFICATION_WATCHED_ENTITIES: Final = 512
 MAX_CLIMATE_SCHEDULES: Final = 128
 MAX_CLIMATE_SLOTS: Final = 256
+MAX_NOTIFICATION_INBOX: Final = 100
 
 CAPABILITIES: Final = {
     "notifications": True,
@@ -30,9 +33,11 @@ CAPABILITIES: Final = {
     "notifications_external_alerts": True,
     "notifications_safe_templates": True,
     "notifications_deep_links": True,
+    "notifications_inbox": True,
     "climate_schedules": True,
     "climate_schedule_apply": True,
     "climate_schedule_modes": True,
+    "climate_overrides": True,
     "news_history": False,
     "vacuum_sessions": False,
     "frontend_bundle": False,

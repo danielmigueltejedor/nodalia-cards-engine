@@ -169,6 +169,112 @@ class NotificationEngineTests(unittest.TestCase):
         self.assertEqual([alert["kind"] for alert in alerts], ["custom"])
         self.assertEqual(alerts[0]["message"], "12°C")
 
+    def test_outdoor_temperature_uses_dedicated_kinds(self) -> None:
+        profile = engine.normalize_profile({
+            "enabled": True,
+            "notify": {"enabled": True, "entities": ["notify.phone"], "min_severity": "info"},
+            "entities": {"outdoor_temperature": ["sensor.outdoor"]},
+            "thresholds": {"hot_temperature": 27, "cold_temperature": 5},
+        })
+        hot = engine.evaluate_transition(profile, "sensor.outdoor", "26", "28", {"friendly_name": "Outdoor", "unit_of_measurement": "°C"})
+        self.assertEqual([alert["kind"] for alert in hot], ["outdoor_hot"])
+        self.assertEqual(hot[0]["title"], "Hot outside")
+        self.assertIn("28°C", hot[0]["message"])
+        cold = engine.evaluate_transition(profile, "sensor.outdoor", "6", "4", {"friendly_name": "Outdoor"})
+        self.assertEqual([alert["kind"] for alert in cold], ["outdoor_cold"])
+
+    def test_outdoor_humidity_reuses_humidity_kinds(self) -> None:
+        profile = engine.normalize_profile({
+            "enabled": True,
+            "notify": {"enabled": True, "entities": ["notify.phone"], "min_severity": "info"},
+            "entities": {"outdoor_humidity": ["sensor.outdoor_humidity"]},
+            "thresholds": {"humidity_high": 70, "humidity_low": 30},
+        })
+        high = engine.evaluate_transition(profile, "sensor.outdoor_humidity", "65", "75", {})
+        self.assertEqual([alert["kind"] for alert in high], ["humidity_high"])
+        low = engine.evaluate_transition(profile, "sensor.outdoor_humidity", "35", "25", {})
+        self.assertEqual([alert["kind"] for alert in low], ["humidity_low"])
+        self.assertIn("25%", low[0]["message"])
+
+    def test_weather_rain_probability_crossing_fires_once(self) -> None:
+        profile = engine.normalize_profile({
+            "enabled": True,
+            "notify": {"enabled": True, "entities": ["notify.phone"], "min_severity": "info"},
+            "entities": {"weather": ["weather.home"]},
+            "thresholds": {"rain_probability": 50},
+        })
+        alerts = engine.evaluate_transition(
+            profile,
+            "weather.home",
+            "cloudy",
+            "rainy",
+            {"friendly_name": "Home", "precipitation_probability": 80},
+            {"friendly_name": "Home", "precipitation_probability": 20},
+        )
+        self.assertEqual([alert["kind"] for alert in alerts], ["rain"])
+        self.assertEqual(alerts[0]["title"], "Rain expected")
+        self.assertIn("80%", alerts[0]["message"])
+        self.assertEqual(
+            engine.evaluate_transition(
+                profile,
+                "weather.home",
+                "rainy",
+                "pouring",
+                {"precipitation_probability": 90},
+                {"precipitation_probability": 80},
+            ),
+            [],
+        )
+
+    def test_weather_rain_falls_back_to_the_first_forecast_entry(self) -> None:
+        profile = engine.normalize_profile({
+            "enabled": True,
+            "notify": {"enabled": True, "entities": ["notify.phone"], "min_severity": "info"},
+            "entities": {"weather": ["weather.home"]},
+            "thresholds": {"rain_probability": 50},
+        })
+        alerts = engine.evaluate_transition(
+            profile,
+            "weather.home",
+            "cloudy",
+            "cloudy",
+            {"forecast": [{"precip_probability": 70}]},
+            {"forecast": [{"precip_probability": 10}]},
+        )
+        self.assertEqual([alert["kind"] for alert in alerts], ["rain"])
+
+    def test_media_player_absence_only_fires_from_an_active_state(self) -> None:
+        profile = engine.normalize_profile({
+            "enabled": True,
+            "notify": {"enabled": True, "entities": ["notify.phone"], "min_severity": "info"},
+            "entities": {"media_player": ["media_player.salon"]},
+        })
+        alerts = engine.evaluate_transition(profile, "media_player.salon", "playing", "idle", {"friendly_name": "Salon"})
+        self.assertEqual([alert["kind"] for alert in alerts], ["media_absence"])
+        self.assertEqual(alerts[0]["message"], "Salon stopped playing.")
+        self.assertEqual(engine.evaluate_transition(profile, "media_player.salon", "idle", "off", {}), [])
+
+    def test_new_smart_groups_are_watched(self) -> None:
+        profile = engine.normalize_profile({
+            "entities": {
+                "weather": ["weather.home"],
+                "media_player": ["media_player.salon"],
+                "outdoor_temperature": ["sensor.outdoor"],
+                "outdoor_humidity": ["sensor.outdoor_humidity"],
+            },
+        })
+        self.assertLessEqual(
+            {"weather.home", "media_player.salon", "sensor.outdoor", "sensor.outdoor_humidity"},
+            engine.watched_entities(profile),
+        )
+
+    def test_new_kinds_have_localized_copy_in_every_language(self) -> None:
+        for language, pack in engine.LOCALIZED_DEFAULT_COPY.items():
+            for kind in ("rain", "outdoor_hot", "outdoor_cold", "media_absence"):
+                with self.subTest(language=language, kind=kind):
+                    self.assertIn(kind, pack)
+                    self.assertNotEqual(engine.default_copy_for(kind, language), engine.DEFAULT_COPY[kind])
+
     def test_protocol_relative_navigation_is_rejected(self) -> None:
         action = engine.normalize_tap_action({"action": "navigate", "navigation_path": "//evil.example"})
         self.assertEqual(action, {"action": "none"})

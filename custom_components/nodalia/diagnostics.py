@@ -26,5 +26,7 @@ async def async_get_config_entry_diagnostics(
         "started": runtime_data.get("started", False),
         "notification_profile_count": notifications.get("profile_count", 0),
         "notification_watched_entity_count": notifications.get("watched_entity_count", 0),
+        "notification_inbox_count": notifications.get("inbox_count", 0),
         "climate_schedule_count": climate.get("schedule_count", 0),
+        "climate_override_count": climate.get("override_count", 0),
     }

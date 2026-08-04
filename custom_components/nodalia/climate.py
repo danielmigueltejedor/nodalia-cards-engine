@@ -13,7 +13,14 @@ from homeassistant.helpers.event import async_track_point_in_time, async_track_s
 from homeassistant.helpers.start import async_at_started
 from homeassistant.util import dt as dt_util
 
-from .climate_engine import active_slot, next_slot_start, normalize_schedule
+from .climate_engine import (
+    active_slot,
+    effective_slot,
+    next_timer_at,
+    normalize_override,
+    normalize_schedule,
+    override_until,
+)
 from .const import MAX_CLIMATE_SCHEDULES, MAX_CLIMATE_SLOTS
 from .storage import NodaliaStorage
 
@@ -73,6 +80,13 @@ class NodaliaClimateManager:
         if entity not in self._schedules and len(self._schedules) >= MAX_CLIMATE_SCHEDULES:
             raise ValueError(f"At most {MAX_CLIMATE_SCHEDULES} climate schedules are supported")
         schedule = normalize_schedule(entity, raw_schedule, MAX_CLIMATE_SLOTS)
+        # Preserve an active override when the card saves slots without re-sending it.
+        if "override" not in (raw_schedule or {}) and isinstance(raw_schedule, dict):
+            existing = self._schedules.get(entity) or {}
+            if existing.get("override"):
+                schedule["override"] = deepcopy(existing["override"])
+        elif isinstance(raw_schedule, dict) and raw_schedule.get("override") is None and "override" in raw_schedule:
+            schedule.pop("override", None)
         self._schedules[entity] = schedule
         await self.storage.async_set("climate_schedules", entity, schedule)
         self._rebuild_state_listener()
@@ -99,19 +113,63 @@ class NodaliaClimateManager:
             raise ValueError("Climate schedule not found")
         return await self._async_apply_schedule(schedule)
 
+    async def async_set_override(self, entity_id: str, raw_override: Any) -> dict[str, Any]:
+        """Store a temporary manual override that wins over the weekly slots."""
+        entity = str(entity_id or "").strip()
+        schedule = self._schedules.get(entity)
+        if schedule is None:
+            raise ValueError("Climate schedule not found")
+        override = normalize_override(raw_override)
+        if override is None:
+            raise ValueError("An override requires a valid ISO 8601 'until' timestamp")
+        schedule["override"] = override
+        await self.storage.async_set("climate_schedules", entity, schedule)
+        if self._started:
+            await self._async_apply_schedule(schedule)
+            self._reschedule()
+        return deepcopy(schedule)
+
+    async def async_clear_override(self, entity_id: str) -> bool:
+        """Drop a manual override and fall back to the weekly schedule."""
+        entity = str(entity_id or "").strip()
+        schedule = self._schedules.get(entity)
+        if schedule is None or schedule.pop("override", None) is None:
+            return False
+        await self.storage.async_set("climate_schedules", entity, schedule)
+        if self._started:
+            await self._async_apply_schedule(schedule)
+            self._reschedule()
+        return True
+
+    def list_schedules(self) -> list[dict[str, Any]]:
+        """Return a compact summary of every stored schedule."""
+        now = dt_util.now()
+        return [
+            {
+                "entity_id": entity_id,
+                "enabled": schedule.get("enabled") is not False,
+                "has_override": self._override_is_active(schedule, now),
+            }
+            for entity_id, schedule in sorted(self._schedules.items())
+        ]
+
     def diagnostics(self) -> dict[str, Any]:
         now = dt_util.now()
         next_starts = {
-            entity_id: next_slot_start(schedule, now)
+            entity_id: next_timer_at(schedule, now)
             for entity_id, schedule in self._schedules.items()
         }
         return {
             "schedule_count": len(self._schedules),
+            "override_count": sum(
+                1 for schedule in self._schedules.values() if self._override_is_active(schedule, now)
+            ),
             "schedules": {
                 entity_id: {
                     "enabled": schedule.get("enabled") is not False,
                     "slot_count": len(schedule.get("slots", [])),
                     "active_slot": (active_slot(schedule, now) or {}).get("id"),
+                    "has_override": self._override_is_active(schedule, now),
                     "next_start": next_starts[entity_id].isoformat()
                     if next_starts[entity_id] is not None
                     else None,
@@ -120,12 +178,25 @@ class NodaliaClimateManager:
             },
         }
 
+    @staticmethod
+    def _override_is_active(schedule: dict[str, Any], now) -> bool:
+        until = override_until(schedule, now)
+        return until is not None and until > now
+
+    async def _async_clear_expired_overrides(self) -> None:
+        now = dt_util.now()
+        for entity_id, schedule in tuple(self._schedules.items()):
+            if "override" not in schedule or self._override_is_active(schedule, now):
+                continue
+            schedule.pop("override", None)
+            await self.storage.async_set("climate_schedules", entity_id, schedule)
+
     async def _async_apply_all(self) -> None:
         for schedule in tuple(self._schedules.values()):
             await self._async_apply_schedule(schedule)
 
     async def _async_apply_schedule(self, schedule: dict[str, Any]) -> bool:
-        slot = active_slot(schedule, dt_util.now())
+        slot = effective_slot(schedule, dt_util.now())
         if slot is None:
             return False
         entity_id = str(schedule.get("entity_id") or "")
@@ -224,7 +295,7 @@ class NodaliaClimateManager:
         candidates = [
             candidate
             for schedule in self._schedules.values()
-            if (candidate := next_slot_start(schedule, now)) is not None
+            if (candidate := next_timer_at(schedule, now)) is not None
         ]
         if not candidates:
             return
@@ -236,5 +307,6 @@ class NodaliaClimateManager:
 
     async def _async_schedule_boundary(self, _now) -> None:
         self._unsub_timer = None
+        await self._async_clear_expired_overrides()
         await self._async_apply_all()
         self._reschedule()

@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.0.0] - 2026-08-04
+
+Second stable Engine release. Raises the WebSocket protocol to **API `2`** while still accepting API `1` clients (`api_min_version: 1`, `api_max_version: 2`).
+
+### Added
+
+- **Notification inbox.** Delivered alerts are stored per profile (newest first, up to 100 entries) and exposed through `nodalia/notifications/inbox/list`. Administrators can empty it with `nodalia/notifications/inbox/clear`, and dismissing an alert marks its inbox entry as dismissed.
+- **Climate overrides.** A temporary manual override with an ISO 8601 `until` wins over the weekly slots and can carry `temperature`, `hvac_mode`, `fan_mode`, `preset_mode` or a `target_temp_low`/`target_temp_high` pair. Set it with `nodalia/climate/override/set` and drop it with `nodalia/climate/override/clear`; the Engine re-arms its timer for the expiry and reapplies the schedule when the override lapses.
+- **Smart alerts.** New rain, outdoor temperature and media-absence recommendations with localized copy in every supported language. Weather entities are evaluated against their precipitation probability, outdoor sensors get their own `outdoor_hot`/`outdoor_cold` kinds, and media players report when playback stops.
+- **Discovery commands.** `nodalia/notifications/list` and `nodalia/climate/schedule/list` let cards enumerate stored profiles and schedules without fetching each one.
+- **Status health block.** `nodalia/status` now reports privacy-safe `profile_count`, `schedule_count`, `inbox_count`, `override_count` and `last_error` counters.
+
+### Changed
+
+- Capability negotiation advertises `notifications_inbox` and `climate_overrides`.
+- Diagnostics include the inbox and active override counts.
+
 ## [1.0.0] - 2026-08-04
 
 First stable release of the independent Nodalia Cards Engine HACS Integration.

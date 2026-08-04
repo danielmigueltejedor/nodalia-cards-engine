@@ -19,7 +19,10 @@ The cards remain installed through HACS as a **Dashboard** repository, so existi
 
 - Background mobile notification profiles with presence, quiet-hours, severity and cooldown policies.
 - Shared notification dismissals stored in Home Assistant.
+- Persistent notification inbox with the alerts the Engine delivered while no dashboard was open.
 - Persistent weekly Climate schedules executed at their native time boundaries.
+- Temporary Climate overrides that win over the weekly slots until they expire.
+- Smart rain, outdoor temperature and media-absence recommendations with localized copy.
 - Authenticated WebSocket API; configuration writes require an administrator.
 - Privacy-safe diagnostics and the `nodalia.test_notification` action.
 
@@ -29,7 +32,7 @@ The cards remain installed through HACS as a **Dashboard** repository, so existi
 - Nodalia Cards `2.0.2` or newer for native Engine discovery (`2.0.3` recommended).
 - The Engine is optional: cards that do not use a server-side feature continue working without it.
 
-Stable **`1.0.0`** is the recommended Engine release. Keep existing packages, automations and helpers until the corresponding profile or schedule has been verified on your Home Assistant instance.
+Stable **`2.0.0`** is the recommended Engine release. It speaks WebSocket API `2` and still answers API `1` clients, so older cards keep working. Keep existing packages, automations and helpers until the corresponding profile or schedule has been verified on your Home Assistant instance.
 
 ## Installation with HACS
 
@@ -50,8 +53,9 @@ Do not remove an existing notification package or Climate automation immediately
 ## Using the Engine
 
 - **Notifications Card:** enable its native/background Engine option and save the profile. Home Assistant then evaluates watched entities even when no dashboard is open.
-- **Climate Card:** save a weekly schedule from the card. The Engine stores it in Home Assistant and applies each boundary without an `input_text`, package or generated automation.
+- **Climate Card:** save a weekly schedule from the card. The Engine stores it in Home Assistant and applies each boundary without an `input_text`, package or generated automation. A temporary override pauses the weekly slots until its `until` timestamp passes.
 - **Shared dismissals:** dismissing a notification in one dashboard is synchronized through Home Assistant for the same profile.
+- **Notification inbox:** alerts delivered in the background stay available per profile so a dashboard opened later can still show what happened.
 
 The cards communicate with the Engine through Home Assistant's authenticated WebSocket connection; no URL, token or YAML secret is required.
 

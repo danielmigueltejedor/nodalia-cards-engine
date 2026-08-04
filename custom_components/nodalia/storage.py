@@ -15,7 +15,7 @@ from .const import STORAGE_KEY, STORAGE_SAVE_DELAY, STORAGE_VERSION
 def _default_data() -> dict[str, Any]:
     return {
         "notifications": {},
-        "notification_runtime": {"cooldowns": {}, "dismissed": {}},
+        "notification_runtime": {"cooldowns": {}, "dismissed": {}, "inbox": {}},
         "climate_schedules": {},
         "news_history": {},
         "vacuum_sessions": {},

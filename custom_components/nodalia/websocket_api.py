@@ -10,6 +10,8 @@ from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant
 
 from .const import (
+    API_MAX_VERSION,
+    API_MIN_VERSION,
     API_VERSION,
     CAPABILITIES,
     DATA_RUNTIME,
@@ -17,6 +19,7 @@ from .const import (
     INTEGRATION_VERSION,
     MAX_CLIMATE_SCHEDULES,
     MAX_CLIMATE_SLOTS,
+    MAX_NOTIFICATION_INBOX,
     MAX_NOTIFICATION_PROFILES,
     MAX_NOTIFICATION_TARGETS,
     MAX_NOTIFICATION_WATCHED_ENTITIES,
@@ -49,19 +52,42 @@ async def websocket_status(hass, connection, msg) -> None:
         {
             "available": runtime is not None and runtime.started,
             "api_version": API_VERSION,
-            "api_min_version": API_VERSION,
-            "api_max_version": API_VERSION,
+            "api_min_version": API_MIN_VERSION,
+            "api_max_version": API_MAX_VERSION,
             "version": INTEGRATION_VERSION,
             "capabilities": [name for name, enabled in CAPABILITIES.items() if enabled],
             "limits": {
                 "notification_profiles": MAX_NOTIFICATION_PROFILES,
                 "notification_targets_per_profile": MAX_NOTIFICATION_TARGETS,
                 "notification_watched_entities": MAX_NOTIFICATION_WATCHED_ENTITIES,
+                "notification_inbox_per_profile": MAX_NOTIFICATION_INBOX,
                 "climate_schedules": MAX_CLIMATE_SCHEDULES,
                 "climate_slots_per_schedule": MAX_CLIMATE_SLOTS,
             },
+            "health": _health(runtime),
         },
     )
+
+
+def _health(runtime: NodaliaRuntime | None) -> dict[str, Any]:
+    """Return privacy-safe counters; never entity ids or notification content."""
+    if runtime is None:
+        return {
+            "profile_count": 0,
+            "schedule_count": 0,
+            "inbox_count": 0,
+            "override_count": 0,
+            "last_error": "",
+        }
+    notifications = runtime.notifications.diagnostics()
+    climate = runtime.climate.diagnostics()
+    return {
+        "profile_count": notifications.get("profile_count", 0),
+        "schedule_count": climate.get("schedule_count", 0),
+        "inbox_count": notifications.get("inbox_count", 0),
+        "override_count": climate.get("override_count", 0),
+        "last_error": "",
+    }
 
 
 @websocket_api.websocket_command(
@@ -86,6 +112,63 @@ async def websocket_notifications_get(hass, connection, msg) -> None:
             "dismissed": runtime.notifications.dismissed(profile_id),
         },
     )
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): "nodalia/notifications/list", API_VERSION_FIELD: vol.Coerce(int)}
+)
+@websocket_api.async_response
+async def websocket_notifications_list(hass, connection, msg) -> None:
+    runtime = _runtime(hass)
+    if runtime is None:
+        _send_runtime_missing(connection, msg)
+        return
+    profiles = [
+        {
+            "id": profile_id,
+            "enabled": (runtime.notifications.get_profile(profile_id) or {}).get("enabled") is True,
+        }
+        for profile_id in runtime.notifications.profile_ids()
+    ]
+    connection.send_result(msg["id"], {"profiles": profiles})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "nodalia/notifications/inbox/list",
+        API_VERSION_FIELD: vol.Coerce(int),
+        vol.Optional("profile_id", default="default"): str,
+    }
+)
+@websocket_api.async_response
+async def websocket_notifications_inbox_list(hass, connection, msg) -> None:
+    runtime = _runtime(hass)
+    if runtime is None:
+        _send_runtime_missing(connection, msg)
+        return
+    profile_id = msg.get("profile_id", "default")
+    connection.send_result(
+        msg["id"],
+        {"profile_id": profile_id, "inbox": runtime.notifications.list_inbox(profile_id)},
+    )
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "nodalia/notifications/inbox/clear",
+        API_VERSION_FIELD: vol.Coerce(int),
+        vol.Optional("profile_id", default="default"): str,
+    }
+)
+@websocket_api.async_response
+async def websocket_notifications_inbox_clear(hass, connection, msg) -> None:
+    runtime = _runtime(hass)
+    if runtime is None:
+        _send_runtime_missing(connection, msg)
+        return
+    cleared = await runtime.notifications.async_clear_inbox(msg.get("profile_id", "default"))
+    connection.send_result(msg["id"], {"cleared": cleared})
 
 
 @websocket_api.require_admin
@@ -225,6 +308,59 @@ async def websocket_climate_schedule_get(hass, connection, msg) -> None:
     )
 
 
+@websocket_api.websocket_command(
+    {vol.Required("type"): "nodalia/climate/schedule/list", API_VERSION_FIELD: vol.Coerce(int)}
+)
+@websocket_api.async_response
+async def websocket_climate_schedule_list(hass, connection, msg) -> None:
+    runtime = _runtime(hass)
+    if runtime is None:
+        _send_runtime_missing(connection, msg)
+        return
+    connection.send_result(msg["id"], {"schedules": runtime.climate.list_schedules()})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "nodalia/climate/override/set",
+        API_VERSION_FIELD: vol.Coerce(int),
+        vol.Required("entity_id"): str,
+        vol.Required("override"): dict,
+    }
+)
+@websocket_api.async_response
+async def websocket_climate_override_set(hass, connection, msg) -> None:
+    runtime = _runtime(hass)
+    if runtime is None:
+        _send_runtime_missing(connection, msg)
+        return
+    try:
+        schedule = await runtime.climate.async_set_override(msg["entity_id"], msg["override"])
+    except ValueError as err:
+        connection.send_error(msg["id"], "invalid_format", str(err))
+        return
+    connection.send_result(msg["id"], {"schedule": schedule})
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "nodalia/climate/override/clear",
+        API_VERSION_FIELD: vol.Coerce(int),
+        vol.Required("entity_id"): str,
+    }
+)
+@websocket_api.async_response
+async def websocket_climate_override_clear(hass, connection, msg) -> None:
+    runtime = _runtime(hass)
+    if runtime is None:
+        _send_runtime_missing(connection, msg)
+        return
+    cleared = await runtime.climate.async_clear_override(msg["entity_id"])
+    connection.send_result(msg["id"], {"cleared": cleared})
+
+
 @websocket_api.require_admin
 @websocket_api.websocket_command(
     {
@@ -302,19 +438,25 @@ async def websocket_diagnostics(hass, connection, msg) -> None:
 
 
 def async_register(hass: HomeAssistant) -> None:
-    """Register the stable v1 frontend protocol exactly once."""
+    """Register the stable v1/v2 frontend protocol exactly once."""
     for command in (
         websocket_status,
         websocket_notifications_get,
+        websocket_notifications_list,
         websocket_notifications_set,
         websocket_notifications_delete,
         websocket_notifications_dismiss,
         websocket_notifications_test,
         websocket_notifications_send_external,
+        websocket_notifications_inbox_list,
+        websocket_notifications_inbox_clear,
         websocket_climate_schedule_get,
+        websocket_climate_schedule_list,
         websocket_climate_schedule_set,
         websocket_climate_schedule_delete,
         websocket_climate_schedule_apply,
+        websocket_climate_override_set,
+        websocket_climate_override_clear,
         websocket_diagnostics,
     ):
         websocket_api.async_register_command(hass, command)

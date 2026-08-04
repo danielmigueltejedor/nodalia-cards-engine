@@ -14,6 +14,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     DEFAULT_NOTIFICATION_PROFILE,
+    MAX_NOTIFICATION_INBOX,
     MAX_NOTIFICATION_PROFILES,
     MAX_NOTIFICATION_WATCHED_ENTITIES,
 )
@@ -130,11 +131,79 @@ class NodaliaNotificationManager:
         normalized_rows.append(identity)
         dismissed_root[profile] = normalized_rows[-250:]
         self.storage.set_delayed("notification_runtime", "dismissed", dismissed_root)
+        self._mark_inbox_dismissed(profile, identity)
 
     def dismissed(self, profile_id: str) -> list[str]:
         root = self.storage.get("notification_runtime", "dismissed", {})
         rows = root.get(self._normalize_profile_id(profile_id), []) if isinstance(root, dict) else []
         return [str(value) for value in rows] if isinstance(rows, list) else []
+
+    def list_inbox(self, profile_id: str = DEFAULT_NOTIFICATION_PROFILE) -> list[dict[str, Any]]:
+        """Return the stored inbox for one profile, newest entry first."""
+        rows = self._inbox_rows(self._normalize_profile_id(profile_id))
+        return [deepcopy(row) for row in rows[:MAX_NOTIFICATION_INBOX]]
+
+    async def async_append_inbox(self, profile_id: str, alert: dict[str, Any]) -> dict[str, Any]:
+        """Record one delivered alert so dashboards can render history."""
+        profile = self._normalize_profile_id(profile_id)
+        entry = self._inbox_entry(profile, alert)
+        root = self._inbox_root()
+        rows = [row for row in self._inbox_rows(profile) if row.get("id") != entry["id"]]
+        root[profile] = [entry, *rows][:MAX_NOTIFICATION_INBOX]
+        self.storage.set_delayed("notification_runtime", "inbox", root)
+        return deepcopy(entry)
+
+    async def async_clear_inbox(self, profile_id: str) -> int:
+        """Drop every stored inbox entry for one profile."""
+        profile = self._normalize_profile_id(profile_id)
+        root = self._inbox_root()
+        cleared = len(self._inbox_rows(profile))
+        if cleared:
+            root[profile] = []
+            self.storage.set_delayed("notification_runtime", "inbox", root)
+        return cleared
+
+    def inbox_count(self) -> int:
+        """Return the total number of stored inbox entries across profiles."""
+        root = self._inbox_root()
+        return sum(len(rows) for rows in root.values() if isinstance(rows, list))
+
+    def _inbox_root(self) -> dict[str, Any]:
+        root = self.storage.get("notification_runtime", "inbox", {})
+        return root if isinstance(root, dict) else {}
+
+    def _inbox_rows(self, profile_id: str) -> list[dict[str, Any]]:
+        rows = self._inbox_root().get(profile_id, [])
+        if not isinstance(rows, list):
+            return []
+        return [row for row in rows if isinstance(row, dict)]
+
+    def _inbox_entry(self, profile_id: str, alert: dict[str, Any]) -> dict[str, Any]:
+        identity = str(alert.get("id") or "").strip()[:240]
+        entry: dict[str, Any] = {
+            "id": identity,
+            "kind": str(alert.get("kind") or "")[:64],
+            "title": str(alert.get("title") or "")[:160],
+            "message": str(alert.get("message") or "")[:2000],
+            "severity": str(alert.get("severity") or "info")[:32],
+            "entity_id": str(alert.get("entity_id") or "")[:255],
+            "created": dt_util.utcnow().isoformat(),
+            "dismissed": identity in self.dismissed(profile_id),
+        }
+        url = str(alert.get("url") or "").strip()[:2048]
+        if url:
+            entry["url"] = url
+        return entry
+
+    def _mark_inbox_dismissed(self, profile_id: str, alert_id: str) -> None:
+        rows = self._inbox_rows(profile_id)
+        if not any(row.get("id") == alert_id and row.get("dismissed") is not True for row in rows):
+            return
+        root = self._inbox_root()
+        root[profile_id] = [
+            {**row, "dismissed": True} if row.get("id") == alert_id else row for row in rows
+        ]
+        self.storage.set_delayed("notification_runtime", "inbox", root)
 
     async def async_send_test(
         self,
@@ -142,21 +211,23 @@ class NodaliaNotificationManager:
         title: str = "Nodalia",
         message: str = "Background notifications are ready.",
     ) -> int:
-        profile = self._profiles.get(self._normalize_profile_id(profile_id))
+        normalized_id = self._normalize_profile_id(profile_id)
+        profile = self._profiles.get(normalized_id)
         if profile is None:
             raise ValueError("Notification profile not found")
-        return await self._async_send(
-            profile,
-            {
-                "id": "test:nodalia",
-                "kind": "test",
-                "entity_id": "",
-                "title": str(title or "Nodalia")[:160],
-                "message": str(message or "Background notifications are ready.")[:2000],
-                "severity": "info",
-                "mobile": "push",
-            },
-        )
+        alert = {
+            "id": "test:nodalia",
+            "kind": "test",
+            "entity_id": "",
+            "title": str(title or "Nodalia")[:160],
+            "message": str(message or "Background notifications are ready.")[:2000],
+            "severity": "info",
+            "mobile": "push",
+        }
+        delivered = await self._async_send(profile, alert)
+        if delivered:
+            await self.async_append_inbox(normalized_id, alert)
+        return delivered
 
     async def async_send_external(self, profile_id: str, alert_id: str) -> int:
         """Deliver one administrator-configured external alert by id."""
@@ -194,10 +265,12 @@ class NodaliaNotificationManager:
         return {
             "profile_count": len(self._profiles),
             "watched_entity_count": len(self._profiles_by_entity),
+            "inbox_count": self.inbox_count(),
             "profiles": {
                 profile_id: {
                     "enabled": profile.get("enabled") is True,
                     "watched_entity_count": len(watched_entities(profile)),
+                    "inbox_count": len(self._inbox_rows(profile_id)),
                     "target_count": len(profile.get("notify", {}).get("entities", []))
                     + len(profile.get("notify", {}).get("services", [])),
                 }
@@ -278,6 +351,10 @@ class NodaliaNotificationManager:
                 "humidifier_fill_low",
                 "humidifier_fill_full",
                 "ink_low",
+                "rain",
+                "outdoor_hot",
+                "outdoor_cold",
+                "media_absence",
             )
         }
         for row in profile.get("custom", []):
@@ -340,6 +417,7 @@ class NodaliaNotificationManager:
             }
             cooldown_root[profile_id] = profile_cooldowns
             self.storage.set_delayed("notification_runtime", "cooldowns", cooldown_root)
+            await self.async_append_inbox(profile_id, alert)
         return delivered
 
     async def _async_send(self, profile: dict[str, Any], alert: dict[str, Any]) -> int:

@@ -36,6 +36,10 @@ DEFAULT_COPY = {
     "humidifier_fill_low": ("Humidifier needs water", "{source} is at {value}.", "warning"),
     "humidifier_fill_full": ("Humidifier tank full", "{source} is at {value}.", "warning"),
     "ink_low": ("Low ink", "{source} is at {value}.", "warning"),
+    "rain": ("Rain expected", "{source} reports a {value} chance of rain.", "warning"),
+    "outdoor_hot": ("Hot outside", "{source} is at {value}.", "warning"),
+    "outdoor_cold": ("Cold outside", "{source} is at {value}.", "warning"),
+    "media_absence": ("Playback stopped", "{source} stopped playing.", "info"),
 }
 
 # Keep titles/messages aligned with the Nodalia Cards runtime locales for background delivery.
@@ -53,6 +57,10 @@ LOCALIZED_DEFAULT_COPY: dict[str, dict[str, tuple[str, str, str]]] = {
         "humidifier_fill_low": ("Depósito bajo", "{source} queda en {value}.", "warning"),
         "humidifier_fill_full": ("Depósito lleno", "{source} está al {value}.", "warning"),
         "ink_low": ("Tinta baja", "{source} queda en {value}.", "warning"),
+        "rain": ("Se espera lluvia", "{source} indica un {value} de probabilidad de lluvia.", "warning"),
+        "outdoor_hot": ("Calor en el exterior", "{source} marca {value}.", "warning"),
+        "outdoor_cold": ("Frío en el exterior", "{source} marca {value}.", "warning"),
+        "media_absence": ("Reproducción detenida", "{source} ha dejado de reproducir.", "info"),
     },
     "pt": {
         "door": ("Porta aberta", "{source} foi aberta.", "warning"),
@@ -67,6 +75,10 @@ LOCALIZED_DEFAULT_COPY: dict[str, dict[str, tuple[str, str, str]]] = {
         "humidifier_fill_low": ("Depósito baixo", "{source} está em {value}.", "warning"),
         "humidifier_fill_full": ("Depósito cheio", "{source} está em {value}.", "warning"),
         "ink_low": ("Pouca tinta", "{source} está em {value}.", "warning"),
+        "rain": ("Chuva prevista", "{source} indica {value} de probabilidade de chuva.", "warning"),
+        "outdoor_hot": ("Calor lá fora", "{source} marca {value}.", "warning"),
+        "outdoor_cold": ("Frio lá fora", "{source} marca {value}.", "warning"),
+        "media_absence": ("Reprodução parada", "{source} deixou de reproduzir.", "info"),
     },
     "fr": {
         "door": ("Porte ouverte", "{source} a été ouverte.", "warning"),
@@ -81,6 +93,10 @@ LOCALIZED_DEFAULT_COPY: dict[str, dict[str, tuple[str, str, str]]] = {
         "humidifier_fill_low": ("Réservoir bas", "{source} est à {value}.", "warning"),
         "humidifier_fill_full": ("Réservoir plein", "{source} est à {value}.", "warning"),
         "ink_low": ("Encre faible", "{source} est à {value}.", "warning"),
+        "rain": ("Pluie prévue", "{source} indique {value} de probabilité de pluie.", "warning"),
+        "outdoor_hot": ("Il fait chaud dehors", "{source} indique {value}.", "warning"),
+        "outdoor_cold": ("Il fait froid dehors", "{source} indique {value}.", "warning"),
+        "media_absence": ("Lecture arrêtée", "{source} a arrêté la lecture.", "info"),
     },
     "de": {
         "door": ("Tür offen", "{source} wurde geöffnet.", "warning"),
@@ -95,6 +111,10 @@ LOCALIZED_DEFAULT_COPY: dict[str, dict[str, tuple[str, str, str]]] = {
         "humidifier_fill_low": ("Tank niedrig", "{source} liegt bei {value}.", "warning"),
         "humidifier_fill_full": ("Tank voll", "{source} liegt bei {value}.", "warning"),
         "ink_low": ("Wenig Tinte", "{source} liegt bei {value}.", "warning"),
+        "rain": ("Regen erwartet", "{source} meldet {value} Regenwahrscheinlichkeit.", "warning"),
+        "outdoor_hot": ("Draußen ist es heiß", "{source} zeigt {value}.", "warning"),
+        "outdoor_cold": ("Draußen ist es kalt", "{source} zeigt {value}.", "warning"),
+        "media_absence": ("Wiedergabe gestoppt", "{source} spielt nicht mehr ab.", "info"),
     },
     "it": {
         "door": ("Porta aperta", "{source} è stata aperta.", "warning"),
@@ -109,6 +129,10 @@ LOCALIZED_DEFAULT_COPY: dict[str, dict[str, tuple[str, str, str]]] = {
         "humidifier_fill_low": ("Serbatoio basso", "{source} è a {value}.", "warning"),
         "humidifier_fill_full": ("Serbatoio pieno", "{source} è a {value}.", "warning"),
         "ink_low": ("Inchiostro basso", "{source} è a {value}.", "warning"),
+        "rain": ("Pioggia prevista", "{source} indica {value} di probabilità di pioggia.", "warning"),
+        "outdoor_hot": ("Fa caldo fuori", "{source} indica {value}.", "warning"),
+        "outdoor_cold": ("Fa freddo fuori", "{source} indica {value}.", "warning"),
+        "media_absence": ("Riproduzione interrotta", "{source} ha smesso di riprodurre.", "info"),
     },
 }
 
@@ -119,6 +143,7 @@ PERCENT_KINDS = {
     "humidifier_fill_low",
     "humidifier_fill_full",
     "ink_low",
+    "rain",
 }
 
 ENTITY_GROUP_KINDS = {
@@ -133,17 +158,21 @@ ENTITY_GROUP_KINDS = {
     "humidifier_fill": "humidifier_fill",
     "humidifier_full": "humidifier_full",
     "ink": "ink",
+    "outdoor_temperature": "outdoor_temperature",
+    "outdoor_humidity": "outdoor_humidity",
+    "weather": "weather",
+    "media_player": "media_player",
 }
 CONTEXT_ENTITY_GROUPS = (
     "calendar",
     "fan",
     "climate",
     "humidifier",
-    "media_player",
-    "weather",
-    "outdoor_temperature",
-    "outdoor_humidity",
 )
+
+RAIN_PROBABILITY_ATTRIBUTES = ("precipitation_probability", "precip_probability")
+MEDIA_ACTIVE_STATES = {"playing", "on"}
+MEDIA_ABSENT_STATES = {"idle", "off", "paused", "standby"}
 
 MAX_SMART_RULES = 64
 MAX_ENTITY_OVERRIDES = 512
@@ -592,6 +621,25 @@ def evaluate_transition(
         kind = "humidifier_fill_full"
     elif crossed_low(entity_id, entities.get("ink"), new_number, old_number, thresholds.get("ink_low")):
         kind = "ink_low"
+    elif crossed_high(entity_id, entities.get("outdoor_temperature"), new_number, old_number, thresholds.get("hot_temperature")):
+        kind = "outdoor_hot"
+    elif crossed_low(entity_id, entities.get("outdoor_temperature"), new_number, old_number, thresholds.get("cold_temperature")):
+        kind = "outdoor_cold"
+    elif crossed_high(entity_id, entities.get("outdoor_humidity"), new_number, old_number, thresholds.get("humidity_high")):
+        kind = "humidity_high"
+    elif crossed_low(entity_id, entities.get("outdoor_humidity"), new_number, old_number, thresholds.get("humidity_low")):
+        kind = "humidity_low"
+
+    alert_value: Any = new_value
+    if not kind and entity_id in _strings(entities.get("weather")):
+        new_probability = rain_probability(attrs)
+        old_probability = rain_probability(old_attrs)
+        if crossed_threshold(new_probability, old_probability, thresholds.get("rain_probability")):
+            kind = "rain"
+            alert_value = new_probability
+    if not kind and entity_id in _strings(entities.get("media_player")):
+        if new_lower in MEDIA_ABSENT_STATES and old_lower in MEDIA_ACTIVE_STATES:
+            kind = "media_absence"
 
     if kind:
         alerts.append(
@@ -599,7 +647,7 @@ def evaluate_transition(
                 profile,
                 kind=kind,
                 entity_id=entity_id,
-                value=new_value,
+                value=alert_value,
                 friendly=friendly,
                 unit=unit,
                 template_values=template_values,
@@ -607,6 +655,28 @@ def evaluate_transition(
             )
         )
     return [alert for alert in alerts if alert_passes_minimum(profile, alert)]
+
+
+def rain_probability(attributes: dict[str, Any]) -> float | None:
+    """Read the rain chance a weather entity exposes on its own state."""
+    attrs = _mapping(attributes)
+    for key in RAIN_PROBABILITY_ATTRIBUTES:
+        value = optional_number(attrs.get(key))
+        if value is not None:
+            return value
+    forecast = _rows(attrs.get("forecast"))
+    first = _mapping(forecast[0]) if forecast else {}
+    for key in RAIN_PROBABILITY_ATTRIBUTES:
+        value = optional_number(first.get(key))
+        if value is not None:
+            return value
+    return None
+
+
+def crossed_threshold(new: float | None, old: float | None, threshold: Any) -> bool:
+    """Return whether a value entered the at-or-above band since the last state."""
+    limit = optional_number(threshold)
+    return new is not None and limit is not None and new >= limit and (old is None or old < limit)
 
 
 def crossed_high(entity_id: str, rows: Any, new: float | None, old: float | None, threshold: Any) -> bool:
