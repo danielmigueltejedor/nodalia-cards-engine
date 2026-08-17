@@ -41,6 +41,20 @@ class NotificationEngineTests(unittest.TestCase):
         self.assertIn("27.1°C", alerts[0]["message"])
         self.assertEqual(engine.evaluate_transition(profile, "sensor.room_temperature", "27.1", "28", {}), [])
 
+    def test_profile_keeps_the_card_language_for_background_copy(self) -> None:
+        profile = self._profile({"language": "es-ES"})
+        self.assertEqual(profile["language"], "es")
+        alerts = engine.evaluate_transition(
+            profile,
+            "sensor.room_temperature",
+            "26",
+            "28",
+            {"friendly_name": "Salón", "unit_of_measurement": "°C"},
+            language=profile["language"],
+        )
+        self.assertEqual(alerts[0]["title"], "Hace calor")
+        self.assertEqual(alerts[0]["message"], "Salón marca 28°C.")
+
     def test_percent_kinds_default_unit_and_localized_copy(self) -> None:
         profile = engine.normalize_profile({
             "enabled": True,

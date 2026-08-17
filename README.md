@@ -32,7 +32,7 @@ The cards remain installed through HACS as a **Dashboard** repository, so existi
 - Nodalia Cards `2.0.2` or newer for native Engine discovery (`2.0.3` recommended).
 - The Engine is optional: cards that do not use a server-side feature continue working without it.
 
-Stable **`2.0.0`** is the recommended Engine release. It speaks WebSocket API `2` and still answers API `1` clients, so older cards keep working. Keep existing packages, automations and helpers until the corresponding profile or schedule has been verified on your Home Assistant instance.
+Stable **`2.0.1`** is the recommended Engine release. It speaks WebSocket API `2` and still answers API `1` clients, so older cards keep working. Notification profiles from Cards `2.2.0-alpha.2` also carry the resolved UI language for consistent background copy. Keep existing packages, automations and helpers until the corresponding profile or schedule has been verified on your Home Assistant instance.
 
 ## Installation with HACS
 

@@ -318,7 +318,10 @@ class NodaliaNotificationManager:
                 getattr(new_state, "attributes", None),
                 getattr(old_state, "attributes", None),
                 self._template_values(profile, entity_id),
-                language=getattr(self.hass.config, "language", "en"),
+                language=(
+                    str(profile.get("language") or "").strip()
+                    or getattr(self.hass.config, "language", "en")
+                ),
             )
             for alert in alerts:
                 await self._async_deliver_if_allowed(profile_id, profile, alert)

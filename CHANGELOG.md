@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.0.1] - 2026-08-17
+
+Patch release for localized Engine-first notification delivery alongside Nodalia Cards `2.2.0-alpha.2`.
+
+### Changed
+
+- Notification profiles persist the resolved language supplied by the Notifications Card.
+- Background smart-alert evaluation prefers the profile language and retains the Home Assistant system language as a fallback for older profiles.
+
+### Fixed
+
+- Engine-generated default titles and messages no longer fall back to English when the active Home Assistant user/card language differs from the server-wide language.
+- Complements the Cards-side package standby/failover flow that prevents Engine and legacy YAML delivery from notifying the same target simultaneously.
+
+### Validation
+
+- Repository, notification-engine and climate-engine test suites pass, including a Spanish temperature-copy regression.
+
 ## [2.0.0] - 2026-08-04
 
 Second stable Engine release. Raises the WebSocket protocol to **API `2`** while still accepting API `1` clients (`api_min_version: 1`, `api_max_version: 2`).

@@ -339,6 +339,11 @@ def normalize_profile(raw: Any) -> dict[str, Any]:
         "version": 2,
         "source": _text(source.get("source"), 100, "nodalia-notifications-card"),
         "card_version": _text(source.get("card_version"), 64),
+        "language": (
+            normalize_language(source.get("language"))
+            if _text(source.get("language"), 16)
+            else ""
+        ),
         "enabled": source.get("enabled") is True,
         "smart_recommendations": source.get("smart_recommendations") is not False,
         "notify": {
