@@ -21,7 +21,7 @@ class RepositoryTests(unittest.TestCase):
         self.assertNotIn("filename", hacs)
         self.assertEqual(manifest["domain"], "nodalia")
         self.assertEqual(manifest["name"], "Nodalia Cards Engine")
-        self.assertEqual(manifest["version"], "2.0.1")
+        self.assertEqual(manifest["version"], "2.0.2")
         self.assertTrue(manifest["config_flow"])
         self.assertEqual(manifest["dependencies"], [])
         self.assertTrue((COMPONENT / "translations" / "en.json").exists())

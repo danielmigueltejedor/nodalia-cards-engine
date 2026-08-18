@@ -32,7 +32,7 @@ The cards remain installed through HACS as a **Dashboard** repository, so existi
 - Nodalia Cards `2.0.2` or newer for native Engine discovery (`2.0.3` recommended).
 - The Engine is optional: cards that do not use a server-side feature continue working without it.
 
-Stable **`2.0.1`** is the recommended Engine release. It speaks WebSocket API `2` and still answers API `1` clients, so older cards keep working. Notification profiles from Cards `2.2.0-alpha.2` also carry the resolved UI language for consistent background copy. Keep existing packages, automations and helpers until the corresponding profile or schedule has been verified on your Home Assistant instance.
+Stable **`2.0.2`** is the recommended Engine release. It speaks WebSocket API `2` and still answers API `1` clients, so older cards keep working. Notification profiles from Cards `2.2.0-alpha.3` carry the resolved UI language and explicitly coordinate the legacy notification helper. While Engine is running it pauses an installed legacy notification package; a clean Engine unload restores that fallback. Keep existing packages, automations and helpers until the corresponding profile or schedule has been verified on your Home Assistant instance.
 
 ## Installation with HACS
 
@@ -48,7 +48,7 @@ Stable **`2.0.1`** is the recommended Engine release. It speaks WebSocket API `2
 
 ## Migration from packages and helpers
 
-Do not remove an existing notification package or Climate automation immediately. Install the Engine, save the relevant card profile or schedule, test native delivery, and only then remove the old package, webhook automation and dedicated helpers. Ordinary cards continue to work when the Engine is absent.
+Do not remove an existing notification package or Climate automation immediately. Install the Engine, save the relevant card profile or schedule, and test native delivery. Engine `2.0.2` pauses `input_boolean.nodalia_background_mobile_notifications` while native delivery owns the profile and restores it on a clean unload, so the package remains a fallback instead of a second sender. Once native delivery is verified, the old package, webhook automation and dedicated helpers can be removed. Ordinary cards continue to work when the Engine is absent.
 
 ## Using the Engine
 
