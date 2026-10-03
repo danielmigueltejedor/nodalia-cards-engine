@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import json
 from pathlib import Path
 import struct
@@ -21,7 +22,7 @@ class RepositoryTests(unittest.TestCase):
         self.assertNotIn("filename", hacs)
         self.assertEqual(manifest["domain"], "nodalia")
         self.assertEqual(manifest["name"], "Nodalia Cards Engine")
-        self.assertEqual(manifest["version"], "2.0.2")
+        self.assertEqual(manifest["version"], "3.0.0")
         self.assertTrue(manifest["config_flow"])
         self.assertEqual(manifest["dependencies"], [])
         self.assertTrue((COMPONENT / "translations" / "en.json").exists())
@@ -82,6 +83,42 @@ class RepositoryTests(unittest.TestCase):
             f'INTEGRATION_VERSION: Final = "{manifest["version"]}"',
             const_source,
         )
+
+    def test_cards_3_client_contract_remains_available(self) -> None:
+        constants = {
+            node.target.id: ast.literal_eval(node.value)
+            for node in ast.parse((COMPONENT / "const.py").read_text()).body
+            if isinstance(node, ast.AnnAssign)
+        }
+        self.assertEqual(constants["API_VERSION"], 2)
+        self.assertEqual(constants["API_MIN_VERSION"], 1)
+        self.assertEqual(constants["API_MAX_VERSION"], 2)
+        self.assertEqual(constants["STORAGE_VERSION"], 1)
+        for capability in (
+            "notifications_background", "notifications_shared_dismissals",
+            "notifications_inbox", "notifications_external_alerts",
+            "climate_schedules", "climate_schedule_apply", "climate_overrides",
+        ):
+            self.assertTrue(constants["CAPABILITIES"][capability])
+
+        websocket_tree = ast.parse((COMPONENT / "websocket_api.py").read_text())
+        commands = {
+            node.value
+            for node in ast.walk(websocket_tree)
+            if isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and node.value.startswith("nodalia/")
+        }
+        expected = {"nodalia/status"}
+        expected.update(f"nodalia/notifications/{name}" for name in (
+            "list", "get", "set", "delete", "dismiss", "test", "send_external",
+            "inbox/list", "inbox/clear",
+        ))
+        expected.update(f"nodalia/climate/{name}" for name in (
+            "schedule/get", "schedule/list", "schedule/set", "schedule/delete",
+            "schedule/apply", "override/set", "override/clear",
+        ))
+        self.assertTrue(expected <= commands, expected - commands)
 
 
 if __name__ == "__main__":

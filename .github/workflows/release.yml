@@ -29,10 +29,29 @@ jobs:
           python -m unittest discover -s tests/python -p 'test_*.py'
           python -m unittest discover -s tests -p 'test_repository.py'
 
+      - name: Extract changelog release notes
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          import re
+
+          version = os.environ["GITHUB_REF_NAME"].removeprefix("v")
+          changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
+          section = re.search(
+              rf"^## \[{re.escape(version)}\][^\n]*\n(.*?)(?=^## \[|\Z)",
+              changelog, re.MULTILINE | re.DOTALL,
+          )
+          assert section is not None, f"Missing changelog section for {version}"
+          notes = section.group(1).strip()
+          assert notes, f"Empty changelog section for {version}"
+          Path("release-notes.md").write_text(notes + "\n", encoding="utf-8")
+          PY
+
       - name: Publish GitHub release
         shell: bash
         run: |
-          release_args=(--verify-tag --generate-notes --title "${GITHUB_REF_NAME#v}")
+          release_args=(--verify-tag --notes-file release-notes.md --title "${GITHUB_REF_NAME#v}")
           if [[ "$GITHUB_REF_NAME" == *-* ]]; then
             release_args+=(--prerelease)
           fi
