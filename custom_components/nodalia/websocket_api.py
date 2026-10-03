@@ -25,6 +25,7 @@ from .const import (
     MAX_NOTIFICATION_WATCHED_ENTITIES,
 )
 from .runtime import NodaliaRuntime
+from .websocket_v3 import async_register as async_register_v3
 
 API_VERSION_FIELD = vol.Optional("api_version", default=API_VERSION)
 
@@ -63,6 +64,11 @@ async def websocket_status(hass, connection, msg) -> None:
                 "notification_inbox_per_profile": MAX_NOTIFICATION_INBOX,
                 "climate_schedules": MAX_CLIMATE_SCHEDULES,
                 "climate_slots_per_schedule": MAX_CLIMATE_SLOTS,
+                "vacuum_sessions": 128,
+                "vacuum_session_bytes": 16384,
+                "notification_snoozes_per_profile": 250,
+                "notification_snooze_days": 7,
+                "weather_refresh_seconds": 900,
             },
             "health": _health(runtime),
         },
@@ -187,7 +193,10 @@ async def websocket_notifications_set(hass, connection, msg) -> None:
         _send_runtime_missing(connection, msg)
         return
     try:
-        profile = await runtime.notifications.async_set_profile(msg.get("profile_id", "default"), msg["profile"])
+        profile_data = dict(msg["profile"])
+        if msg.get("api_version") == 3:
+            profile_data["template_version"] = 3
+        profile = await runtime.notifications.async_set_profile(msg.get("profile_id", "default"), profile_data)
     except ValueError as err:
         connection.send_error(msg["id"], "invalid_format", str(err))
         return
@@ -438,7 +447,8 @@ async def websocket_diagnostics(hass, connection, msg) -> None:
 
 
 def async_register(hass: HomeAssistant) -> None:
-    """Register the stable v1/v2 frontend protocol exactly once."""
+    """Register compatible v1/v2 commands and optional v3 operations exactly once."""
+    async_register_v3(hass)
     for command in (
         websocket_status,
         websocket_notifications_get,

@@ -33,11 +33,11 @@ The cards remain installed through HACS as a **Dashboard** repository, so existi
 - Older Nodalia Cards `2.0.2`+ retain native Engine discovery and API compatibility.
 - The Engine is optional: cards that do not use a server-side feature continue working without it.
 
-Stable **`3.0.0`** is the recommended Engine release for Nodalia Cards **`3.0.0`**. Compatibility is checked against the current Cards `3.0.0-alpha.4` client. The Engine keeps WebSocket API `2` and still accepts API `1` clients; the release number does not introduce an API `3` protocol. Existing profiles, inbox entries, dismissals and Climate schedules remain in the same storage format, so no data or dashboard YAML migration is required.
+Published Engine **3.0.0** supports API 1–2. The unreleased API v3 implementation negotiates with API 2 clients and preserves storage version 1 and their saved temperature templates. New v3 rain profiles use probability for `{value}` and explicit `{temperature}{temperature_unit}` for temperature.
+
+[API v3 contract](docs/api-v3.md) documents the new side-effect-free notification and Climate previews, persistent snoozes, private revisioned vacuum selection sessions, and background forecast queries. New optional commands require the corresponding advertised capability. Existing profiles, inbox entries, dismissals and Climate schedules require no storage migration. Default rain messages report probability, including a real 0%; missing percentages are not invented.
 
 Notification profiles carry the resolved UI language and coordinate the legacy notification helper. While Engine is running it pauses an installed legacy notification package; a clean Engine unload restores that fallback. Keep existing packages, automations and helpers until the corresponding profile or schedule has been verified on your Home Assistant instance.
-
-For rain-alert custom titles and messages, `{value}` now means the current weather temperature with `temperature_unit`, matching Cards `3.0.0`. A real zero is preserved and a missing temperature produces an empty value. Use `{precipitation_probability}` for the rain chance with `%`; default messages continue to show that probability. Update older rain templates that used `{value}` for the probability.
 
 ## Installation with HACS
 

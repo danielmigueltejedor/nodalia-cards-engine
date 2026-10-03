@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 import math
 import re
 from typing import Any
@@ -170,7 +170,7 @@ CONTEXT_ENTITY_GROUPS = (
     "humidifier",
 )
 
-RAIN_PROBABILITY_ATTRIBUTES = ("precipitation_probability", "precip_probability")
+RAIN_PROBABILITY_ATTRIBUTES = ("precipitation_probability", "precip_probability", "precipitationProbability", "probability_of_precipitation", "rain_probability")
 MEDIA_ACTIVE_STATES = {"playing", "on"}
 MEDIA_ABSENT_STATES = {"idle", "off", "paused", "standby"}
 
@@ -219,7 +219,8 @@ def _strings(value: Any, limit: int = 512) -> list[str]:
 def _number(value: Any, fallback: float) -> float:
     try:
         text = str(value).strip().replace("%", "")
-        return float(text)
+        number = float(text)
+        return number if math.isfinite(number) else fallback
     except (TypeError, ValueError):
         return fallback
 
@@ -235,7 +236,8 @@ def optional_number(value: Any) -> float | None:
         text = str(value).strip().replace("%", "")
         if text.lower() in {"", "none", "unknown", "unavailable"}:
             return None
-        return float(text)
+        number = float(text)
+        return number if math.isfinite(number) else None
     except (TypeError, ValueError):
         return None
 
@@ -339,6 +341,7 @@ def normalize_profile(raw: Any) -> dict[str, Any]:
         "version": 2,
         "source": _text(source.get("source"), 100, "nodalia-notifications-card"),
         "card_version": _text(source.get("card_version"), 64),
+        "template_version": 3 if source.get("template_version") == 3 else 2,
         "language": (
             normalize_language(source.get("language"))
             if _text(source.get("language"), 16)
@@ -642,15 +645,8 @@ def evaluate_transition(
         old_probability = rain_probability(old_attrs)
         if crossed_threshold(new_probability, old_probability, thresholds.get("rain_probability")):
             kind = "rain"
-            # Cards 3 uses the current weather temperature for rain {value}.
-            # Keep the rain chance separate so default copy still reports it.
-            temperature = optional_number(attrs.get("temperature"))
-            alert_value = temperature if temperature is not None and math.isfinite(temperature) else None
-            unit = str(attrs.get("temperature_unit") or "")
-            alert_template_values = {
-                **(template_values or {}),
-                "precipitation_probability": format_measurement(new_probability, "%")[0],
-            }
+            alert_value, unit = rain_value(profile, attrs, new_probability)
+            alert_template_values = {**(template_values or {}), **rain_template_values(attrs, new_probability)}
     if not kind and entity_id in _strings(entities.get("media_player")):
         if new_lower in MEDIA_ABSENT_STATES and old_lower in MEDIA_ACTIVE_STATES:
             kind = "media_absence"
@@ -668,6 +664,9 @@ def evaluate_transition(
                 language=language,
             )
         )
+    if kind == "rain" and alerts:
+        alerts[-1]["measurements"] = rain_measurements(attrs, new_probability)
+
     return [alert for alert in alerts if alert_passes_minimum(profile, alert)]
 
 
@@ -676,13 +675,13 @@ def rain_probability(attributes: dict[str, Any]) -> float | None:
     attrs = _mapping(attributes)
     for key in RAIN_PROBABILITY_ATTRIBUTES:
         value = optional_number(attrs.get(key))
-        if value is not None:
+        if value is not None and 0 <= value <= 100:
             return value
     forecast = _rows(attrs.get("forecast"))
     first = _mapping(forecast[0]) if forecast else {}
     for key in RAIN_PROBABILITY_ATTRIBUTES:
         value = optional_number(first.get(key))
-        if value is not None:
+        if value is not None and 0 <= value <= 100:
             return value
     return None
 
@@ -843,3 +842,62 @@ def cooldown_identity(profile: dict[str, Any], alert: dict[str, Any]) -> str:
     if notify.get("group_similar") is False:
         return str(alert.get("id") or "")
     return str(alert.get("kind") or alert.get("id") or "")
+
+
+def rain_measurements(attributes: dict[str, Any], probability: Any) -> dict[str, Any]:
+    """Keep current temperature and forecast probability distinct, including zero."""
+    temperature = optional_number(attributes.get("temperature"))
+    if temperature is not None and not math.isfinite(temperature):
+        temperature = None
+    return {
+        "precipitation_probability": {"value": optional_number(probability), "unit": "%"},
+        "temperature": {"value": temperature, "unit": str(attributes.get("temperature_unit") or "") if temperature is not None else ""},
+    }
+
+
+def rain_template_values(attributes: dict[str, Any], probability: Any) -> dict[str, str]:
+    measurements = rain_measurements(attributes, probability)
+    temperature = measurements["temperature"]
+    return {
+        "precipitation_probability": format_measurement(probability, "%")[0],
+        "temperature": format_measurement(temperature["value"], "")[0],
+        "temperature_unit": temperature["unit"],
+    }
+
+
+def evaluate_forecasts(profile: dict[str, Any], entity_id: str, rows: Any, attributes: dict[str, Any], now: datetime, template_values: dict[str, str] | None = None, language: str = "en") -> list[dict[str, Any]]:
+    """Evaluate upcoming rain; forecast temperatures never replace current readings."""
+    candidates = []
+    lookahead = timedelta(hours=max(0, min(72, _number(profile.get("thresholds", {}).get("rain_lookahead_hours"), 6))))
+    for row in _rows(rows)[:256]:
+        if not isinstance(row, dict):
+            continue
+        try:
+            at = datetime.fromisoformat(str(row.get("datetime") or "").replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if at.tzinfo is None or not now <= at <= now + lookahead:
+            continue
+        probability = rain_probability(row)
+        rainy = str(row.get("condition") or "").lower() in {"rainy", "pouring", "lightning-rainy"}
+        if rainy or (probability is not None and probability >= profile.get("thresholds", {}).get("rain_probability", 50)):
+            candidates.append((at, row, probability))
+    if not candidates:
+        return []
+    at, row, probability = min(candidates, key=lambda item: item[0])
+    values = {**(template_values or {}), **rain_template_values(attributes, probability), "time": at.astimezone(now.tzinfo).strftime("%H:%M")}
+    alert = build_alert(profile, kind="rain", entity_id=entity_id, value=rain_value(profile, attributes, probability)[0], friendly=str(attributes.get("friendly_name") or entity_id), unit=rain_value(profile, attributes, probability)[1], template_values=values, language=language)
+    if probability is None and not any(_mapping(_mapping(profile.get(key)).get(entity_id if key == "overrides" else "rain")).get("message") for key in ("smart", "overrides")):
+        alert["message"] = render_template({"es": "{source} prevé lluvia sobre {time}.", "pt": "{source} prevê chuva por volta de {time}.", "fr": "{source} prévoit de la pluie vers {time}.", "de": "{source} erwartet Regen gegen {time}.", "it": "{source} prevede pioggia verso {time}."}.get(normalize_language(language), "{source} expects rain around {time}."), {**values, "source": str(attributes.get("friendly_name") or entity_id)})
+    alert["id"] = f"rain:{entity_id}:forecast:{at.isoformat()}"
+    alert["forecast_at"] = at.isoformat()
+    alert["measurements"] = rain_measurements(attributes, probability)
+    return [alert] if alert_passes_minimum(profile, alert) else []
+
+
+def rain_value(profile: dict[str, Any], attributes: dict[str, Any], probability: Any) -> tuple[Any, str]:
+    """Keep saved legacy temperature templates until the client explicitly migrates them."""
+    if profile.get("template_version") == 3:
+        return probability, "%"
+    temperature = rain_measurements(attributes, probability)["temperature"]
+    return temperature["value"], temperature["unit"]

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+from datetime import timedelta
 import logging
 import json
 from collections.abc import Callable
@@ -9,7 +11,7 @@ from copy import deepcopy
 from typing import Any
 
 from homeassistant.core import Event, HomeAssistant
-from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -22,6 +24,7 @@ from .notification_engine import (
     cooldown_identity,
     delivery_allowed,
     evaluate_transition,
+    evaluate_forecasts,
     is_within_quiet_hours,
     normalize_profile,
     passes_presence_context,
@@ -43,6 +46,10 @@ class NodaliaNotificationManager:
         self._profiles: dict[str, dict[str, Any]] = {}
         self._profiles_by_entity: dict[str, set[str]] = {}
         self._unsub_state_listener: Callable[[], None] | None = None
+        self._unsub_forecast: Callable[[], None] | None = None
+        self._forecast_lock = asyncio.Lock()
+        self._forecast_task: asyncio.Task | None = None
+        self._started = False
 
     async def async_start(self) -> None:
         """Load profiles and start their shared indexed listener."""
@@ -65,13 +72,27 @@ class NodaliaNotificationManager:
             profiles[normalized_id] = profile
             watched = candidate_watched
         self._profiles = profiles
+        self._started = True
         self._rebuild_listener()
+        self._unsub_forecast = async_track_time_interval(self.hass, self._async_forecast_tick, timedelta(minutes=15))
+        self._queue_forecast_refresh()
 
     async def async_stop(self) -> None:
         """Detach listeners and flush runtime state."""
         if self._unsub_state_listener is not None:
             self._unsub_state_listener()
             self._unsub_state_listener = None
+        self._started = False
+        if self._unsub_forecast is not None:
+            self._unsub_forecast()
+            self._unsub_forecast = None
+        if self._forecast_task is not None:
+            self._forecast_task.cancel()
+            try:
+                await self._forecast_task
+            except asyncio.CancelledError:
+                pass
+            self._forecast_task = None
         self._profiles_by_entity.clear()
         await self.storage.async_flush()
 
@@ -105,6 +126,7 @@ class NodaliaNotificationManager:
         self._profiles[normalized_id] = profile
         await self.storage.async_set("notifications", normalized_id, profile)
         self._rebuild_listener()
+        self._queue_forecast_refresh()
         return deepcopy(profile)
 
     async def async_delete_profile(self, profile_id: str) -> bool:
@@ -190,6 +212,10 @@ class NodaliaNotificationManager:
             "created": dt_util.utcnow().isoformat(),
             "dismissed": identity in self.dismissed(profile_id),
         }
+        if isinstance(alert.get("measurements"), dict):
+            entry["measurements"] = deepcopy(alert["measurements"])
+        if alert.get("forecast_at"):
+            entry["forecast_at"] = alert["forecast_at"]
         url = str(alert.get("url") or "").strip()[:2048]
         if url:
             entry["url"] = url
@@ -380,6 +406,8 @@ class NodaliaNotificationManager:
         profile: dict[str, Any],
         alert: dict[str, Any],
     ) -> int:
+        if self.is_snoozed(profile_id, str(alert.get("id") or "")):
+            return 0
         if not delivery_allowed(profile, alert):
             return 0
         now = dt_util.now()
@@ -556,3 +584,51 @@ class NodaliaNotificationManager:
             except (TypeError, ValueError):
                 return str(value)
         return str(value)
+
+
+    def is_snoozed(self, profile_id: str, alert_id: str) -> bool:
+        root = self.storage.get("notification_runtime", "snoozed", {})
+        rows = root.get(profile_id, {}) if isinstance(root, dict) else {}
+        until = rows.get(alert_id) if isinstance(rows, dict) else None
+        return isinstance(until, (int, float)) and until > dt_util.utcnow().timestamp()
+
+    def _queue_forecast_refresh(self) -> None:
+        if self._started and (self._forecast_task is None or self._forecast_task.done()):
+            self._forecast_task = self.hass.async_create_task(self._async_forecast_tick())
+
+    async def _async_forecast_tick(self, _now=None) -> None:
+        if not self._started or self._forecast_lock.locked():
+            return
+        async with self._forecast_lock:
+            entities = {entity_id for profile in self._profiles.values() if profile.get("enabled") for entity_id in profile.get("entities", {}).get("weather", [])}
+            for entity_id in sorted(entities):
+                state = self.hass.states.get(entity_id)
+                if state is None or not self._started:
+                    continue
+                try:
+                    features = int(state.attributes.get("supported_features") or 0)
+                except (TypeError, ValueError, OverflowError):
+                    continue
+                forecast_type = "hourly" if features & 2 else "daily" if features & 1 else "twice_daily" if features & 4 else ""
+                if not forecast_type:
+                    continue
+                try:
+                    response = await asyncio.wait_for(self.hass.services.async_call("weather", "get_forecasts", {"entity_id": entity_id, "type": forecast_type}, blocking=True, return_response=True), timeout=15)
+                except Exception as err:
+                    _LOGGER.debug("Nodalia weather forecast unavailable for %s: %s", entity_id, type(err).__name__)
+                    continue
+                if not self._started or not isinstance(response, dict):
+                    continue
+                entity_response = response.get(entity_id)
+                forecast = entity_response.get("forecast", []) if isinstance(entity_response, dict) else []
+                for profile_id, profile in tuple(self._profiles.items()):
+                    if not profile.get("enabled") or entity_id not in profile.get("entities", {}).get("weather", []):
+                        continue
+                    current_state = self.hass.states.get(entity_id)
+                    if current_state is None:
+                        continue
+                    alerts = evaluate_forecasts(profile, entity_id, forecast, current_state.attributes, dt_util.now(), self._template_values(profile, entity_id), str(profile.get("language") or getattr(self.hass.config, "language", "en")))
+                    for alert in alerts:
+                        if any(row.get("id") == alert["id"] for row in self.list_inbox(profile_id)):
+                            continue
+                        await self._async_deliver_if_allowed(profile_id, profile, alert)

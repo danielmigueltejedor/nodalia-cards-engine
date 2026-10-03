@@ -1,5 +1,19 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- API v3 negotiation with API 1–2 compatibility and explicit versioned rain templates.
+- Notification preview without sending, persistent per-profile snoozes, and Climate schedule preview using the Home Assistant timezone.
+- Private per-user vacuum selection sessions with revision conflict detection, entity permissions and bounded storage.
+- Native weather forecast queries in the background, preserving delivery policies and suppressing repeated delivered forecast identities across restarts.
+
+### Fixed
+
+- Rain messages separate probability from current temperature, preserve zero readings and omit missing measurements. Saved Engine 3.0.0 temperature templates retain their legacy meaning until explicit migration.
+
+
 ## [3.0.0] - 2026-10-03
 
 Stable Engine companion release prepared for Nodalia Cards `3.0.0`, checked against the current `3.0.0-alpha.4` frontend.

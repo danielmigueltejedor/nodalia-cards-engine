@@ -90,9 +90,9 @@ class RepositoryTests(unittest.TestCase):
             for node in ast.parse((COMPONENT / "const.py").read_text()).body
             if isinstance(node, ast.AnnAssign)
         }
-        self.assertEqual(constants["API_VERSION"], 2)
+        self.assertEqual(constants["API_VERSION"], 3)
         self.assertEqual(constants["API_MIN_VERSION"], 1)
-        self.assertEqual(constants["API_MAX_VERSION"], 2)
+        self.assertEqual(constants["API_MAX_VERSION"], 3)
         self.assertEqual(constants["STORAGE_VERSION"], 1)
         for capability in (
             "notifications_background", "notifications_shared_dismissals",

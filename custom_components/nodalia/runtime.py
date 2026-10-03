@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from homeassistant.core import HomeAssistant
 
+from .capabilities import NodaliaCapabilities
 from .climate import NodaliaClimateManager
 from .legacy_fallback import LegacyNotificationFallback
 from .notifications import NodaliaNotificationManager
@@ -18,6 +19,7 @@ class NodaliaRuntime:
         self.storage = NodaliaStorage(hass)
         self.notifications = NodaliaNotificationManager(hass, self.storage)
         self.climate = NodaliaClimateManager(hass, self.storage)
+        self.capabilities = NodaliaCapabilities(hass, self.storage, self.notifications)
         self.legacy_fallback = LegacyNotificationFallback(hass)
         self.started = False
 
