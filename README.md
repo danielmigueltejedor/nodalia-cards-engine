@@ -24,16 +24,18 @@ The cards remain installed through HACS as a **Dashboard** repository, so existi
 - Temporary Climate overrides that win over the weekly slots until they expire.
 - Smart rain, outdoor temperature and media-absence recommendations with localized copy.
 - Authenticated WebSocket API; configuration writes require an administrator.
+- Native rain forecast delivery while the dashboard is closed.
+- Notification and Climate previews without side effects, persistent notification snoozes and private vacuum selection drafts with conflict detection.
 - Privacy-safe diagnostics and the `nodalia.test_notification` action.
 
 ## Compatibility
 
 - Home Assistant `2025.1.0` or newer.
-- Nodalia Cards `3.0.0` is the target companion release; the current `3.0.0-alpha.4` client uses the supported API `2`.
+- Nodalia Cards `3.0.0` is the target companion release; the current `3.0.0-alpha.5` client negotiates API `3` and falls back to API `2` with older Engines.
 - Older Nodalia Cards `2.0.2`+ retain native Engine discovery and API compatibility.
 - The Engine is optional: cards that do not use a server-side feature continue working without it.
 
-Published Engine **2.0.2** supports API 1–2. Engine **3.0.0** was prepared in source but has not been published. The unreleased API v3 implementation negotiates with API 2 clients and preserves storage version 1. New v3 rain profiles use probability for `{value}` and explicit `{temperature}{temperature_unit}` for temperature.
+Stable Engine **3.0.0** supports API 1–3 and preserves storage version 1. Existing API 1/2 clients remain compatible; Engine 2.0.2 continues to support API 1–2. New v3 rain profiles use probability for `{value}` and explicit `{temperature}{temperature_unit}` for temperature.
 
 [API v3 contract](docs/api-v3.md) documents the new side-effect-free notification and Climate previews, persistent snoozes, private revisioned vacuum selection sessions, and background forecast queries. New optional commands require the corresponding advertised capability. Existing profiles, inbox entries, dismissals and Climate schedules require no storage migration. Default rain messages report probability, including a real 0%; missing percentages are not invented.
 

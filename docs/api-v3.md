@@ -1,8 +1,7 @@
 # Nodalia Engine API v3
 
 This protocol is independent of the Engine and Cards release numbers. The
-unreleased implementation supports API 1–3; published Engine 2.0.2 and the
-previously prepared Engine 3.0.0 code support API 1–2. Cards discovers the server using `nodalia/status` with API 2 and
+Engine 3.0.0 implementation supports API 1–3; Engine 2.0.2 supports API 1–2. Cards discovers the server using `nodalia/status` with API 2 and
 chooses the highest shared version (3 or 2). Status discovery must remain
 available before negotiation. A capability is usable only when advertised;
 the new endpoints below require API 3 and return `unsupported_api_version`

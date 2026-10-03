@@ -2,37 +2,37 @@
 
 ## [Unreleased]
 
-### Added
-
-- API v3 negotiation with API 1–2 compatibility and explicit versioned rain templates.
-- Notification preview without sending, persistent per-profile snoozes, and Climate schedule preview using the Home Assistant timezone.
-- Private per-user vacuum selection sessions with revision conflict detection, entity permissions and bounded storage.
-- Native weather forecast queries in the background, preserving delivery policies and suppressing repeated delivered forecast identities across restarts.
-
-### Fixed
-
-- Rain messages separate probability from current temperature, preserve zero readings and omit missing measurements. Restore the published Engine's probability meaning of `{value}` and replace the temporary temperature alias in the unpublished 3.0.0 preparation; temperature messages use explicit fields.
-
-
 ## [3.0.0] - 2026-10-03
 
-Stable Engine companion release prepared for Nodalia Cards `3.0.0`, checked against the current `3.0.0-alpha.4` frontend.
+Stable Engine release with WebSocket API v3, native forecast alerts and persistent advanced card capabilities. Companion frontend: Nodalia Cards `3.0.0-alpha.5`.
 
-### Compatibility
+### Added
 
-- Keep WebSocket API `2` with the supported API `1`–`2` range. The Cards 3 TypeScript client retains the same commands, capability negotiation and payloads.
-- Keep storage version `1`: existing notification profiles, inbox entries, shared dismissals, weekly Climate schedules and temporary overrides require no migration.
-- Retain localized background delivery, administrator-only configuration writes and legacy notification package standby/restoration.
+- Notification preview without sending or saving. Preview reports missing entities and the policy that blocks an alert; delivery eligibility remains advisory.
+- Persistent per-profile notification snoozes, with timezone-aware expiry up to seven days and automatic resumption after expiry.
+- Climate schedule preview using the Home Assistant timezone and the same weekly, overnight and override rules as execution, without changing the thermostat.
+- Private vacuum selection drafts per authenticated user and entity. Read/control permissions, revision conflicts and bounded storage prevent unauthorized access and silent concurrent overwrites; saving a draft never starts a robot.
+- Native background rain forecasts while the dashboard is closed. Queries run at startup, profile save and every 15 minutes, with bounded lookahead, query timeouts, shared entity requests and delivered-identity deduplication across restarts.
+- Typed rain measurements and explicit current-temperature template fields, preserving real zero readings and representing missing data without inventing a value.
+- Capability-gated API v3 commands and advertised resource limits. The Cards bridge exposes the new operations; additional editor controls can be integrated separately.
 
 ### Fixed
 
-- Rain-alert custom titles and messages resolve `{value}` to the current weather temperature and its unit, matching Cards 3. A real zero is preserved; missing or invalid temperatures resolve to an empty value.
-- Default rain messages retain the precipitation probability. Custom rain templates can use `{precipitation_probability}` to include the chance with `%` alongside the temperature. Existing templates that used `{value}` for rain probability should switch to that token.
+- Rain `{value}` retains the probability meaning of published Engine 2.0.2, including `%`. Default messages report probability; forecasts without a numeric probability use coherent expected-rain copy.
+- Current temperature uses `{temperature}{temperature_unit}`; forecast temperature never replaces it. Custom copy such as `Fuera hacen {value}.` must use the explicit temperature fields. The temporary temperature alias in the unpublished 3.0.0 preparation is removed.
+- Forecast delivery starts after the legacy notification package enters standby, respects severity, quiet hours, presence, dismissals, snoozes and cooldowns, and cancels owned work on unload.
 
-### Release
+### Compatibility and upgrade
 
-- Align integration metadata, runtime status and recommended companion documentation on `3.0.0`.
-- Publish the version's changelog section as the GitHub release notes.
+- API range `1`–`3`; existing API 1/2 commands remain available. Cards `3.0.0-alpha.5` negotiates API 3 and falls back to API 2 with older Engines.
+- Storage version remains `1`. Existing profiles, inbox entries, shared dismissals, weekly schedules and overrides require no storage migration.
+- Configuration writes and previews require an administrator. Vacuum drafts use the authenticated user's entity permissions.
+- Update the HACS Integration and restart Home Assistant. Reload the browser, confirm **Engine active**, then verify a real background alert and schedule before removing fallback packages or helpers.
+
+### Validation
+
+- 53 functional tests and six repository contracts, including the actual background manager and API v3 handlers against Home Assistant transport boundaries.
+- Integration compilation, HACS, Hassfest and CodeQL validation. No live Home Assistant installation is exercised by these automated tests.
 
 ## [2.0.2] - 2026-08-18
 
