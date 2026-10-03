@@ -29,10 +29,15 @@ The cards remain installed through HACS as a **Dashboard** repository, so existi
 ## Compatibility
 
 - Home Assistant `2025.1.0` or newer.
-- Nodalia Cards `2.0.2` or newer for native Engine discovery (`2.0.3` recommended).
+- Nodalia Cards `3.0.0` is the target companion release; the current `3.0.0-alpha.4` client uses the supported API `2`.
+- Older Nodalia Cards `2.0.2`+ retain native Engine discovery and API compatibility.
 - The Engine is optional: cards that do not use a server-side feature continue working without it.
 
-Stable **`2.0.2`** is the recommended Engine release. It speaks WebSocket API `2` and still answers API `1` clients, so older cards keep working. Notification profiles from Cards `2.2.0-alpha.3` carry the resolved UI language and explicitly coordinate the legacy notification helper. While Engine is running it pauses an installed legacy notification package; a clean Engine unload restores that fallback. Keep existing packages, automations and helpers until the corresponding profile or schedule has been verified on your Home Assistant instance.
+Stable **`3.0.0`** is the recommended Engine release for Nodalia Cards **`3.0.0`**. Compatibility is checked against the current Cards `3.0.0-alpha.4` client. The Engine keeps WebSocket API `2` and still accepts API `1` clients; the release number does not introduce an API `3` protocol. Existing profiles, inbox entries, dismissals and Climate schedules remain in the same storage format, so no data or dashboard YAML migration is required.
+
+Notification profiles carry the resolved UI language and coordinate the legacy notification helper. While Engine is running it pauses an installed legacy notification package; a clean Engine unload restores that fallback. Keep existing packages, automations and helpers until the corresponding profile or schedule has been verified on your Home Assistant instance.
+
+For rain-alert custom titles and messages, `{value}` now means the current weather temperature with `temperature_unit`, matching Cards `3.0.0`. A real zero is preserved and a missing temperature produces an empty value. Use `{precipitation_probability}` for the rain chance with `%`; default messages continue to show that probability. Update older rain templates that used `{value}` for the probability.
 
 ## Installation with HACS
 
@@ -48,7 +53,7 @@ Stable **`2.0.2`** is the recommended Engine release. It speaks WebSocket API `2
 
 ## Migration from packages and helpers
 
-Do not remove an existing notification package or Climate automation immediately. Install the Engine, save the relevant card profile or schedule, and test native delivery. Engine `2.0.2` pauses `input_boolean.nodalia_background_mobile_notifications` while native delivery owns the profile and restores it on a clean unload, so the package remains a fallback instead of a second sender. Once native delivery is verified, the old package, webhook automation and dedicated helpers can be removed. Ordinary cards continue to work when the Engine is absent.
+Do not remove an existing notification package or Climate automation immediately. Install the Engine, save the relevant card profile or schedule, and test native delivery. Engine `3.0.0` pauses `input_boolean.nodalia_background_mobile_notifications` while native delivery owns the profile and restores it on a clean unload, so the package remains a fallback instead of a second sender. Once native delivery is verified, the old package, webhook automation and dedicated helpers can be removed. Ordinary cards continue to work when the Engine is absent.
 
 ## Using the Engine
 

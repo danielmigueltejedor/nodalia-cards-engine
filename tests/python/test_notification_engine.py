@@ -257,6 +257,54 @@ class NotificationEngineTests(unittest.TestCase):
         )
         self.assertEqual([alert["kind"] for alert in alerts], ["rain"])
 
+    def test_cards_3_rain_templates_use_current_weather_temperature(self) -> None:
+        profile = engine.normalize_profile({
+            "enabled": True,
+            "card_version": "3.0.0",
+            "notify": {"enabled": True, "entities": ["notify.phone"], "min_severity": "info"},
+            "entities": {"weather": ["weather.home"]},
+            "smart": {"rain": {"title": "Outside: {value}", "message": "Rain: {precipitation_probability}"}},
+            "overrides": {"weather.home": {"message": "Fuera hacen {value}. Lluvia: {precipitation_probability}."}},
+        })
+        for temperature, unit, expected in (
+            (21.5, "°C", "21.5°C"),
+            (0, "°C", "0°C"),
+            (-2, "°C", "-2°C"),
+            (68, "°F", "68°F"),
+            (12, "", "12"),
+            (None, "°C", ""),
+            ("unknown", "°C", ""),
+            ("unavailable", "°C", ""),
+            ("not-a-number", "°C", ""),
+            (float("nan"), "°C", ""),
+            (float("inf"), "°C", ""),
+        ):
+            with self.subTest(temperature=temperature, unit=unit):
+                alerts = engine.evaluate_transition(
+                    profile, "weather.home", "cloudy", "rainy",
+                    {"temperature": temperature, "temperature_unit": unit, "precipitation_probability": 80},
+                    {"precipitation_probability": 20},
+                )
+                self.assertEqual(len(alerts), 1)
+                self.assertEqual(alerts[0]["id"], "rain:weather.home")
+                self.assertEqual(alerts[0]["title"], f"Outside: {expected}")
+                self.assertEqual(alerts[0]["message"], f"Fuera hacen {expected}. Lluvia: 80%.")
+
+    def test_rain_default_copy_keeps_probability_in_all_supported_languages(self) -> None:
+        profile = engine.normalize_profile({"entities": {"weather": ["weather.home"]}})
+        for language in ("en", *engine.LOCALIZED_DEFAULT_COPY):
+            with self.subTest(language=language):
+                alerts = engine.evaluate_transition(
+                    profile, "weather.home", "cloudy", "rainy",
+                    {"temperature": 0, "temperature_unit": "°C", "precipitation_probability": 80},
+                    {"precipitation_probability": 20},
+                    language=language,
+                )
+                self.assertEqual(len(alerts), 1)
+                self.assertIn("80%", alerts[0]["message"])
+                self.assertNotIn("0°C", alerts[0]["message"])
+                self.assertNotIn("{precipitation_probability}", alerts[0]["message"])
+
     def test_media_player_absence_only_fires_from_an_active_state(self) -> None:
         profile = engine.normalize_profile({
             "enabled": True,

@@ -1,5 +1,32 @@
 # Changelog
 
+## [3.0.0] - 2026-10-03
+
+Stable Engine companion release prepared for Nodalia Cards `3.0.0`, checked against the current `3.0.0-alpha.4` frontend.
+
+### Compatibility
+
+- Keep WebSocket API `2` with the supported API `1`–`2` range. The Cards 3 TypeScript client retains the same commands, capability negotiation and payloads.
+- Keep storage version `1`: existing notification profiles, inbox entries, shared dismissals, weekly Climate schedules and temporary overrides require no migration.
+- Retain localized background delivery, administrator-only configuration writes and legacy notification package standby/restoration.
+
+### Fixed
+
+- Rain-alert custom titles and messages resolve `{value}` to the current weather temperature and its unit, matching Cards 3. A real zero is preserved; missing or invalid temperatures resolve to an empty value.
+- Default rain messages retain the precipitation probability. Custom rain templates can use `{precipitation_probability}` to include the chance with `%` alongside the temperature. Existing templates that used `{value}` for rain probability should switch to that token.
+
+### Release
+
+- Align integration metadata, runtime status and recommended companion documentation on `3.0.0`.
+- Publish the version's changelog section as the GitHub release notes.
+
+## [2.0.2] - 2026-08-18
+
+### Fixed
+
+- Pause an installed legacy background notification package while the Engine is running, preventing duplicate mobile delivery.
+- Restore the legacy helper on a clean unload only when the Engine originally paused it.
+
 ## [2.0.1] - 2026-08-17
 
 Patch release for localized Engine-first notification delivery alongside Nodalia Cards `2.2.0-alpha.2`.

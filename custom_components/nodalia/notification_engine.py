@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import math
 import re
 from typing import Any
 
@@ -36,7 +37,7 @@ DEFAULT_COPY = {
     "humidifier_fill_low": ("Humidifier needs water", "{source} is at {value}.", "warning"),
     "humidifier_fill_full": ("Humidifier tank full", "{source} is at {value}.", "warning"),
     "ink_low": ("Low ink", "{source} is at {value}.", "warning"),
-    "rain": ("Rain expected", "{source} reports a {value} chance of rain.", "warning"),
+    "rain": ("Rain expected", "{source} reports a {precipitation_probability} chance of rain.", "warning"),
     "outdoor_hot": ("Hot outside", "{source} is at {value}.", "warning"),
     "outdoor_cold": ("Cold outside", "{source} is at {value}.", "warning"),
     "media_absence": ("Playback stopped", "{source} stopped playing.", "info"),
@@ -57,7 +58,7 @@ LOCALIZED_DEFAULT_COPY: dict[str, dict[str, tuple[str, str, str]]] = {
         "humidifier_fill_low": ("Depósito bajo", "{source} queda en {value}.", "warning"),
         "humidifier_fill_full": ("Depósito lleno", "{source} está al {value}.", "warning"),
         "ink_low": ("Tinta baja", "{source} queda en {value}.", "warning"),
-        "rain": ("Se espera lluvia", "{source} indica un {value} de probabilidad de lluvia.", "warning"),
+        "rain": ("Se espera lluvia", "{source} indica un {precipitation_probability} de probabilidad de lluvia.", "warning"),
         "outdoor_hot": ("Calor en el exterior", "{source} marca {value}.", "warning"),
         "outdoor_cold": ("Frío en el exterior", "{source} marca {value}.", "warning"),
         "media_absence": ("Reproducción detenida", "{source} ha dejado de reproducir.", "info"),
@@ -75,7 +76,7 @@ LOCALIZED_DEFAULT_COPY: dict[str, dict[str, tuple[str, str, str]]] = {
         "humidifier_fill_low": ("Depósito baixo", "{source} está em {value}.", "warning"),
         "humidifier_fill_full": ("Depósito cheio", "{source} está em {value}.", "warning"),
         "ink_low": ("Pouca tinta", "{source} está em {value}.", "warning"),
-        "rain": ("Chuva prevista", "{source} indica {value} de probabilidade de chuva.", "warning"),
+        "rain": ("Chuva prevista", "{source} indica {precipitation_probability} de probabilidade de chuva.", "warning"),
         "outdoor_hot": ("Calor lá fora", "{source} marca {value}.", "warning"),
         "outdoor_cold": ("Frio lá fora", "{source} marca {value}.", "warning"),
         "media_absence": ("Reprodução parada", "{source} deixou de reproduzir.", "info"),
@@ -93,7 +94,7 @@ LOCALIZED_DEFAULT_COPY: dict[str, dict[str, tuple[str, str, str]]] = {
         "humidifier_fill_low": ("Réservoir bas", "{source} est à {value}.", "warning"),
         "humidifier_fill_full": ("Réservoir plein", "{source} est à {value}.", "warning"),
         "ink_low": ("Encre faible", "{source} est à {value}.", "warning"),
-        "rain": ("Pluie prévue", "{source} indique {value} de probabilité de pluie.", "warning"),
+        "rain": ("Pluie prévue", "{source} indique {precipitation_probability} de probabilité de pluie.", "warning"),
         "outdoor_hot": ("Il fait chaud dehors", "{source} indique {value}.", "warning"),
         "outdoor_cold": ("Il fait froid dehors", "{source} indique {value}.", "warning"),
         "media_absence": ("Lecture arrêtée", "{source} a arrêté la lecture.", "info"),
@@ -111,7 +112,7 @@ LOCALIZED_DEFAULT_COPY: dict[str, dict[str, tuple[str, str, str]]] = {
         "humidifier_fill_low": ("Tank niedrig", "{source} liegt bei {value}.", "warning"),
         "humidifier_fill_full": ("Tank voll", "{source} liegt bei {value}.", "warning"),
         "ink_low": ("Wenig Tinte", "{source} liegt bei {value}.", "warning"),
-        "rain": ("Regen erwartet", "{source} meldet {value} Regenwahrscheinlichkeit.", "warning"),
+        "rain": ("Regen erwartet", "{source} meldet {precipitation_probability} Regenwahrscheinlichkeit.", "warning"),
         "outdoor_hot": ("Draußen ist es heiß", "{source} zeigt {value}.", "warning"),
         "outdoor_cold": ("Draußen ist es kalt", "{source} zeigt {value}.", "warning"),
         "media_absence": ("Wiedergabe gestoppt", "{source} spielt nicht mehr ab.", "info"),
@@ -129,7 +130,7 @@ LOCALIZED_DEFAULT_COPY: dict[str, dict[str, tuple[str, str, str]]] = {
         "humidifier_fill_low": ("Serbatoio basso", "{source} è a {value}.", "warning"),
         "humidifier_fill_full": ("Serbatoio pieno", "{source} è a {value}.", "warning"),
         "ink_low": ("Inchiostro basso", "{source} è a {value}.", "warning"),
-        "rain": ("Pioggia prevista", "{source} indica {value} di probabilità di pioggia.", "warning"),
+        "rain": ("Pioggia prevista", "{source} indica {precipitation_probability} di probabilità di pioggia.", "warning"),
         "outdoor_hot": ("Fa caldo fuori", "{source} indica {value}.", "warning"),
         "outdoor_cold": ("Fa freddo fuori", "{source} indica {value}.", "warning"),
         "media_absence": ("Riproduzione interrotta", "{source} ha smesso di riprodurre.", "info"),
@@ -143,7 +144,6 @@ PERCENT_KINDS = {
     "humidifier_fill_low",
     "humidifier_fill_full",
     "ink_low",
-    "rain",
 }
 
 ENTITY_GROUP_KINDS = {
@@ -636,12 +636,21 @@ def evaluate_transition(
         kind = "humidity_low"
 
     alert_value: Any = new_value
+    alert_template_values = template_values
     if not kind and entity_id in _strings(entities.get("weather")):
         new_probability = rain_probability(attrs)
         old_probability = rain_probability(old_attrs)
         if crossed_threshold(new_probability, old_probability, thresholds.get("rain_probability")):
             kind = "rain"
-            alert_value = new_probability
+            # Cards 3 uses the current weather temperature for rain {value}.
+            # Keep the rain chance separate so default copy still reports it.
+            temperature = optional_number(attrs.get("temperature"))
+            alert_value = temperature if temperature is not None and math.isfinite(temperature) else None
+            unit = str(attrs.get("temperature_unit") or "")
+            alert_template_values = {
+                **(template_values or {}),
+                "precipitation_probability": format_measurement(new_probability, "%")[0],
+            }
     if not kind and entity_id in _strings(entities.get("media_player")):
         if new_lower in MEDIA_ABSENT_STATES and old_lower in MEDIA_ACTIVE_STATES:
             kind = "media_absence"
@@ -655,7 +664,7 @@ def evaluate_transition(
                 value=alert_value,
                 friendly=friendly,
                 unit=unit,
-                template_values=template_values,
+                template_values=alert_template_values,
                 language=language,
             )
         )
