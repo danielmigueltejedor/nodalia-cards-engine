@@ -63,7 +63,7 @@ class RepositoryTests(unittest.TestCase):
     def test_publication_contract_includes_license_and_required_validation(self) -> None:
         self.assertIn("MIT License", (ROOT / "LICENSE").read_text(encoding="utf-8"))
         self.assertIn(
-            "custom_components/nodalia/brand/icon.png",
+            "docs/images/nodalia-cards-engine-logo.png",
             (ROOT / "README.md").read_text(encoding="utf-8"),
         )
         hacs_workflow = (ROOT / ".github" / "workflows" / "hacs.yml").read_text(

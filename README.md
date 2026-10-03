@@ -1,6 +1,5 @@
 <div align="center">
-  <img src="custom_components/nodalia/brand/icon.png" alt="Nodalia Cards Engine" width="160">
-  <h1>Nodalia Cards Engine</h1>
+  <img src="docs/images/nodalia-cards-engine-logo.png" alt="Nodalia Cards Engine" width="700">
   <p><strong>Optional native backend for the advanced features of Nodalia Cards.</strong></p>
 </div>
 
