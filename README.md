@@ -33,7 +33,7 @@ The cards remain installed through HACS as a **Dashboard** repository, so existi
 - Older Nodalia Cards `2.0.2`+ retain native Engine discovery and API compatibility.
 - The Engine is optional: cards that do not use a server-side feature continue working without it.
 
-Published Engine **3.0.0** supports API 1–2. The unreleased API v3 implementation negotiates with API 2 clients and preserves storage version 1 and their saved temperature templates. New v3 rain profiles use probability for `{value}` and explicit `{temperature}{temperature_unit}` for temperature.
+Published Engine **2.0.2** supports API 1–2. Engine **3.0.0** was prepared in source but has not been published. The unreleased API v3 implementation negotiates with API 2 clients and preserves storage version 1. New v3 rain profiles use probability for `{value}` and explicit `{temperature}{temperature_unit}` for temperature.
 
 [API v3 contract](docs/api-v3.md) documents the new side-effect-free notification and Climate previews, persistent snoozes, private revisioned vacuum selection sessions, and background forecast queries. New optional commands require the corresponding advertised capability. Existing profiles, inbox entries, dismissals and Climate schedules require no storage migration. Default rain messages report probability, including a real 0%; missing percentages are not invented.
 

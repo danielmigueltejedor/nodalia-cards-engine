@@ -27,13 +27,14 @@ class NodaliaRuntime:
         await self.storage.async_load()
         await self.notifications.async_start()
         await self.climate.async_start()
-        self.started = True
         await self.legacy_fallback.async_suppress()
+        self.started = True
+        self.notifications._queue_forecast_refresh()
 
     async def async_stop(self) -> None:
         self.started = False
-        await self.climate.async_stop()
         await self.notifications.async_stop()
+        await self.climate.async_stop()
         await self.legacy_fallback.async_restore()
 
     def diagnostics(self) -> dict:

@@ -11,7 +11,7 @@
 
 ### Fixed
 
-- Rain messages separate probability from current temperature, preserve zero readings and omit missing measurements. Saved Engine 3.0.0 temperature templates retain their legacy meaning until explicit migration.
+- Rain messages separate probability from current temperature, preserve zero readings and omit missing measurements. Restore the published Engine's probability meaning of `{value}` and replace the temporary temperature alias in the unpublished 3.0.0 preparation; temperature messages use explicit fields.
 
 
 ## [3.0.0] - 2026-10-03

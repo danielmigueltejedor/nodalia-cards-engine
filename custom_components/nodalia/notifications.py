@@ -75,7 +75,6 @@ class NodaliaNotificationManager:
         self._started = True
         self._rebuild_listener()
         self._unsub_forecast = async_track_time_interval(self.hass, self._async_forecast_tick, timedelta(minutes=15))
-        self._queue_forecast_refresh()
 
     async def async_stop(self) -> None:
         """Detach listeners and flush runtime state."""

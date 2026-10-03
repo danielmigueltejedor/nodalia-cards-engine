@@ -86,7 +86,7 @@ class BackgroundTests(unittest.IsolatedAsyncioTestCase):
         self.manager._queue_forecast_refresh();await self.services.entered.wait();task=self.manager._forecast_task
         await self.manager.async_stop();self.assertTrue(task.done());self.assertIsNone(self.manager._forecast_task);self.assertEqual(self.sent(),[])
 
-    async def test_legacy_saved_templates_keep_temperature_until_explicit_migration(self):
-        self.profile['smart']={'rain':{'message':'Fuera hacen {value}.'}}
+    async def test_legacy_saved_probability_templates_keep_probability(self):
+        self.profile['smart']={'rain':{'message':'Probabilidad {value}.'}}
         self.profile['template_version']=2
-        await self.manager._async_forecast_tick();self.assertEqual(self.sent()[0][2]['message'],'Fuera hacen 0°C.')
+        await self.manager._async_forecast_tick();self.assertEqual(self.sent()[0][2]['message'],'Probabilidad 80%.')

@@ -1,8 +1,8 @@
 # Nodalia Engine API v3
 
 This protocol is independent of the Engine and Cards release numbers. The
-unreleased implementation supports API 1–3; published Engine 3.0.0 supports
-API 1–2. Cards discovers the server using `nodalia/status` with API 2 and
+unreleased implementation supports API 1–3; published Engine 2.0.2 and the
+previously prepared Engine 3.0.0 code support API 1–2. Cards discovers the server using `nodalia/status` with API 2 and
 chooses the highest shared version (3 or 2). Status discovery must remain
 available before negotiation. A capability is usable only when advertised;
 the new endpoints below require API 3 and return `unsupported_api_version`
@@ -28,10 +28,10 @@ message: "Probabilidad de lluvia: {precipitation_probability}."
 ```
 
 For a temperature message, use `Fuera hacen {temperature}{temperature_unit}.`
-Do not keep `Fuera hacen {value}.` in a migrated rain profile. Saved profiles
-without `template_version: 3` retain Engine 3.0.0's legacy temperature meaning
-of `{value}` until the client explicitly migrates them. Default rain copy
-continues to report probability regardless of that legacy alias.
+Do not keep `Fuera hacen {value}.` in a migrated rain profile. The probability meaning of `{value}` matches the published Engine 2.0.2.
+The earlier unpublished Engine 3.0.0 preparation temporarily changed it to
+temperature; that change is reverted. Update custom temperature messages to
+the explicit temperature tokens. Default rain copy reports probability.
 
 Rain alerts and inbox entries add structured `measurements` without changing
 existing title/message fields:

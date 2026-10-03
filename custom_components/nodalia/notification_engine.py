@@ -645,7 +645,7 @@ def evaluate_transition(
         old_probability = rain_probability(old_attrs)
         if crossed_threshold(new_probability, old_probability, thresholds.get("rain_probability")):
             kind = "rain"
-            alert_value, unit = rain_value(profile, attrs, new_probability)
+            alert_value, unit = new_probability, "%"
             alert_template_values = {**(template_values or {}), **rain_template_values(attrs, new_probability)}
     if not kind and entity_id in _strings(entities.get("media_player")):
         if new_lower in MEDIA_ABSENT_STATES and old_lower in MEDIA_ACTIVE_STATES:
@@ -886,18 +886,10 @@ def evaluate_forecasts(profile: dict[str, Any], entity_id: str, rows: Any, attri
         return []
     at, row, probability = min(candidates, key=lambda item: item[0])
     values = {**(template_values or {}), **rain_template_values(attributes, probability), "time": at.astimezone(now.tzinfo).strftime("%H:%M")}
-    alert = build_alert(profile, kind="rain", entity_id=entity_id, value=rain_value(profile, attributes, probability)[0], friendly=str(attributes.get("friendly_name") or entity_id), unit=rain_value(profile, attributes, probability)[1], template_values=values, language=language)
+    alert = build_alert(profile, kind="rain", entity_id=entity_id, value=probability, friendly=str(attributes.get("friendly_name") or entity_id), unit="%", template_values=values, language=language)
     if probability is None and not any(_mapping(_mapping(profile.get(key)).get(entity_id if key == "overrides" else "rain")).get("message") for key in ("smart", "overrides")):
         alert["message"] = render_template({"es": "{source} prevé lluvia sobre {time}.", "pt": "{source} prevê chuva por volta de {time}.", "fr": "{source} prévoit de la pluie vers {time}.", "de": "{source} erwartet Regen gegen {time}.", "it": "{source} prevede pioggia verso {time}."}.get(normalize_language(language), "{source} expects rain around {time}."), {**values, "source": str(attributes.get("friendly_name") or entity_id)})
     alert["id"] = f"rain:{entity_id}:forecast:{at.isoformat()}"
     alert["forecast_at"] = at.isoformat()
     alert["measurements"] = rain_measurements(attributes, probability)
     return [alert] if alert_passes_minimum(profile, alert) else []
-
-
-def rain_value(profile: dict[str, Any], attributes: dict[str, Any], probability: Any) -> tuple[Any, str]:
-    """Keep saved legacy temperature templates until the client explicitly migrates them."""
-    if profile.get("template_version") == 3:
-        return probability, "%"
-    temperature = rain_measurements(attributes, probability)["temperature"]
-    return temperature["value"], temperature["unit"]
