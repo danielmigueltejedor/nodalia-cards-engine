@@ -24,20 +24,22 @@ The cards remain installed through HACS as a **Dashboard** repository, so existi
 - Temporary Climate overrides that win over the weekly slots until they expire.
 - Smart rain, outdoor temperature and media-absence recommendations with localized copy.
 - Authenticated WebSocket API; configuration writes require an administrator.
+- Native rain forecast delivery while the dashboard is closed.
+- Notification and Climate previews without side effects, persistent notification snoozes and private vacuum selection drafts with conflict detection.
 - Privacy-safe diagnostics and the `nodalia.test_notification` action.
 
 ## Compatibility
 
 - Home Assistant `2025.1.0` or newer.
-- Nodalia Cards `3.0.0` is the target companion release; the current `3.0.0-alpha.4` client uses the supported API `2`.
+- Nodalia Cards `3.0.0` is the target companion release; the current `3.0.0-alpha.5` client negotiates API `3` and falls back to API `2` with older Engines.
 - Older Nodalia Cards `2.0.2`+ retain native Engine discovery and API compatibility.
 - The Engine is optional: cards that do not use a server-side feature continue working without it.
 
-Stable **`3.0.0`** is the recommended Engine release for Nodalia Cards **`3.0.0`**. Compatibility is checked against the current Cards `3.0.0-alpha.4` client. The Engine keeps WebSocket API `2` and still accepts API `1` clients; the release number does not introduce an API `3` protocol. Existing profiles, inbox entries, dismissals and Climate schedules remain in the same storage format, so no data or dashboard YAML migration is required.
+Stable Engine **3.0.0** supports API 1–3 and preserves storage version 1. Existing API 1/2 clients remain compatible; Engine 2.0.2 continues to support API 1–2. New v3 rain profiles use probability for `{value}` and explicit `{temperature}{temperature_unit}` for temperature.
+
+[API v3 contract](docs/api-v3.md) documents the new side-effect-free notification and Climate previews, persistent snoozes, private revisioned vacuum selection sessions, and background forecast queries. New optional commands require the corresponding advertised capability. Existing profiles, inbox entries, dismissals and Climate schedules require no storage migration. Default rain messages report probability, including a real 0%; missing percentages are not invented.
 
 Notification profiles carry the resolved UI language and coordinate the legacy notification helper. While Engine is running it pauses an installed legacy notification package; a clean Engine unload restores that fallback. Keep existing packages, automations and helpers until the corresponding profile or schedule has been verified on your Home Assistant instance.
-
-For rain-alert custom titles and messages, `{value}` now means the current weather temperature with `temperature_unit`, matching Cards `3.0.0`. A real zero is preserved and a missing temperature produces an empty value. Use `{precipitation_probability}` for the rain chance with `%`; default messages continue to show that probability. Update older rain templates that used `{value}` for the probability.
 
 ## Installation with HACS
 

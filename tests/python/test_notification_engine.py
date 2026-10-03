@@ -257,14 +257,15 @@ class NotificationEngineTests(unittest.TestCase):
         )
         self.assertEqual([alert["kind"] for alert in alerts], ["rain"])
 
-    def test_cards_3_rain_templates_use_current_weather_temperature(self) -> None:
+    def test_cards_3_rain_templates_separate_probability_and_current_temperature(self) -> None:
         profile = engine.normalize_profile({
             "enabled": True,
             "card_version": "3.0.0",
+            "template_version": 3,
             "notify": {"enabled": True, "entities": ["notify.phone"], "min_severity": "info"},
             "entities": {"weather": ["weather.home"]},
-            "smart": {"rain": {"title": "Outside: {value}", "message": "Rain: {precipitation_probability}"}},
-            "overrides": {"weather.home": {"message": "Fuera hacen {value}. Lluvia: {precipitation_probability}."}},
+            "smart": {"rain": {"title": "Outside: {temperature}{temperature_unit}", "message": "Rain: {precipitation_probability}"}},
+            "overrides": {"weather.home": {"message": "Fuera hacen {temperature}{temperature_unit}. Lluvia: {value}."}},
         })
         for temperature, unit, expected in (
             (21.5, "°C", "21.5°C"),

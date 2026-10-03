@@ -7,9 +7,9 @@ from typing import Final
 DOMAIN: Final = "nodalia"
 INTEGRATION_NAME: Final = "Nodalia Cards Engine"
 INTEGRATION_VERSION: Final = "3.0.0"
-API_VERSION: Final = 2
+API_VERSION: Final = 3
 API_MIN_VERSION: Final = 1
-API_MAX_VERSION: Final = 2
+API_MAX_VERSION: Final = 3
 
 DATA_RUNTIME: Final = "runtime"
 DATA_WEBSOCKET_REGISTERED: Final = "websocket_registered"
@@ -39,6 +39,10 @@ CAPABILITIES: Final = {
     "climate_schedule_modes": True,
     "climate_overrides": True,
     "news_history": False,
-    "vacuum_sessions": False,
+    "vacuum_sessions": True,
+    "notifications_preview": True,
+    "notifications_snooze": True,
+    "climate_schedule_preview": True,
+    "weather_forecast_alerts": True,
     "frontend_bundle": False,
 }

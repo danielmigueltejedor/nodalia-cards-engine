@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from homeassistant.core import HomeAssistant
 
+from .capabilities import NodaliaCapabilities
 from .climate import NodaliaClimateManager
 from .legacy_fallback import LegacyNotificationFallback
 from .notifications import NodaliaNotificationManager
@@ -18,6 +19,7 @@ class NodaliaRuntime:
         self.storage = NodaliaStorage(hass)
         self.notifications = NodaliaNotificationManager(hass, self.storage)
         self.climate = NodaliaClimateManager(hass, self.storage)
+        self.capabilities = NodaliaCapabilities(hass, self.storage, self.notifications)
         self.legacy_fallback = LegacyNotificationFallback(hass)
         self.started = False
 
@@ -25,13 +27,14 @@ class NodaliaRuntime:
         await self.storage.async_load()
         await self.notifications.async_start()
         await self.climate.async_start()
-        self.started = True
         await self.legacy_fallback.async_suppress()
+        self.started = True
+        self.notifications._queue_forecast_refresh()
 
     async def async_stop(self) -> None:
         self.started = False
-        await self.climate.async_stop()
         await self.notifications.async_stop()
+        await self.climate.async_stop()
         await self.legacy_fallback.async_restore()
 
     def diagnostics(self) -> dict:
