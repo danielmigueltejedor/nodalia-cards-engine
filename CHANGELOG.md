@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Replace the README header with the supplied Nodalia Cards Engine wordmark and the integration brand icon with its matching PNG, including a high-density variant. Preserve transparency and trim excess outer margins.
+
 ## [3.0.0] - 2026-10-03
 
 Stable Engine release with WebSocket API v3, native forecast alerts and persistent advanced card capabilities. Companion frontend: Nodalia Cards `3.0.0-alpha.5`.
