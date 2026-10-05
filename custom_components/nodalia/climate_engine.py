@@ -148,12 +148,15 @@ def normalize_schedule(entity_id: str, raw: Any, max_slots: int = 256) -> dict[s
     return schedule
 
 
-def active_slot(schedule: dict[str, Any], now: datetime) -> dict[str, Any] | None:
-    """Return the active slot whose start is latest, including overnight slots."""
+def _active_occurrence(
+    schedule: dict[str, Any], now: datetime
+) -> tuple[dict[str, Any], datetime] | None:
+    """Return the winning slot and the end of the occurrence that covers ``now``."""
     if schedule.get("enabled") is False:
         return None
     winner: dict[str, Any] | None = None
     winner_start: datetime | None = None
+    winner_end: datetime | None = None
     for slot in schedule.get("slots", []):
         if not isinstance(slot, dict) or slot.get("enabled") is False:
             continue
@@ -171,7 +174,16 @@ def active_slot(schedule: dict[str, Any], now: datetime) -> dict[str, Any] | Non
             if start_at <= now < end_at and (winner_start is None or start_at > winner_start):
                 winner = slot
                 winner_start = start_at
-    return dict(winner) if winner is not None else None
+                winner_end = end_at
+    if winner is None or winner_end is None:
+        return None
+    return winner, winner_end
+
+
+def active_slot(schedule: dict[str, Any], now: datetime) -> dict[str, Any] | None:
+    """Return the active slot whose start is latest, including overnight slots."""
+    found = _active_occurrence(schedule, now)
+    return dict(found[0]) if found is not None else None
 
 
 def effective_slot(schedule: dict[str, Any], now: datetime) -> dict[str, Any] | None:
@@ -187,11 +199,36 @@ def effective_slot(schedule: dict[str, Any], now: datetime) -> dict[str, Any] | 
 
 def next_timer_at(schedule: dict[str, Any], now: datetime) -> datetime | None:
     """Return the next moment this schedule needs re-evaluation."""
-    candidates = [candidate for candidate in (next_slot_start(schedule, now),) if candidate is not None]
+    candidates = [
+        candidate
+        for candidate in (
+            next_slot_start(schedule, now),
+            _revealing_slot_end(schedule, now),
+        )
+        if candidate is not None
+    ]
     until = override_until(schedule, now)
     if until is not None and until > now:
         candidates.append(until)
     return min(candidates) if candidates else None
+
+
+def _revealing_slot_end(schedule: dict[str, Any], now: datetime) -> datetime | None:
+    """Return the active slot's end when a different slot is active then.
+
+    Only that winning occurrence can uncover another slot by ending. An earlier
+    slot that finishes while this one still covers the clock does not, and an
+    end that leaves no slot active is not a boundary. The occurrence starts no
+    earlier than yesterday, so its end stays inside the 8-day start lookahead.
+    """
+    found = _active_occurrence(schedule, now)
+    if found is None:
+        return None
+    slot, end_at = found
+    successor = active_slot(schedule, end_at)
+    if successor is None or successor == slot:
+        return None
+    return end_at
 
 
 def next_slot_start(schedule: dict[str, Any], now: datetime) -> datetime | None:
