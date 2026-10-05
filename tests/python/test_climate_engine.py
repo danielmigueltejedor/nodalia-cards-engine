@@ -151,6 +151,77 @@ class ClimateEngineTests(unittest.TestCase):
         now = datetime.fromisoformat("2026-07-27T08:00:00+02:00")
         self.assertEqual(engine.effective_slot(schedule, now)["id"], "morning")
 
+    def test_next_timer_at_uses_overlapping_slot_end(self) -> None:
+        schedule = engine.normalize_schedule(
+            "climate.salon",
+            {
+                "slots": [
+                    {"id": "day", "day": "mon", "start": "06:00", "end": "22:00", "temperature": 19},
+                    {"id": "boost", "day": "mon", "start": "08:00", "end": "10:00", "temperature": 22},
+                ],
+            },
+        )
+        now = datetime.fromisoformat("2026-07-27T09:00:00+02:00")
+        at_end = datetime.fromisoformat("2026-07-27T10:00:00+02:00")
+        self.assertEqual(engine.active_slot(schedule, now)["id"], "boost")
+        self.assertEqual(engine.next_timer_at(schedule, now).isoformat(), "2026-07-27T10:00:00+02:00")
+        self.assertEqual(engine.active_slot(schedule, at_end)["id"], "day")
+        self.assertEqual(engine.active_slot(schedule, at_end)["temperature"], 19)
+
+    def test_next_timer_at_uncovers_previous_overnight_slot(self) -> None:
+        schedule = engine.normalize_schedule(
+            "climate.salon",
+            {
+                "slots": [
+                    {"id": "night", "day": "mon", "start": "22:00", "end": "08:00", "temperature": 18},
+                    {"id": "boost", "day": "tue", "start": "06:00", "end": "07:00", "temperature": 22},
+                ],
+            },
+        )
+        now = datetime.fromisoformat("2026-07-28T06:30:00+02:00")
+        at_end = datetime.fromisoformat("2026-07-28T07:00:00+02:00")
+        self.assertEqual(engine.active_slot(schedule, now)["id"], "boost")
+        self.assertEqual(engine.next_timer_at(schedule, now).isoformat(), "2026-07-28T07:00:00+02:00")
+        self.assertEqual(engine.active_slot(schedule, at_end)["id"], "night")
+        self.assertEqual(engine.active_slot(schedule, at_end)["temperature"], 18)
+
+    def test_next_timer_at_ignores_end_of_a_slot_that_is_not_winning(self) -> None:
+        schedule = engine.normalize_schedule(
+            "climate.salon",
+            {
+                "slots": [
+                    {"id": "day", "day": "mon", "start": "06:00", "end": "22:00", "temperature": 19},
+                    {"id": "mid", "day": "mon", "start": "08:00", "end": "15:00", "temperature": 21},
+                    {"id": "early", "day": "mon", "start": "07:00", "end": "10:00", "temperature": 20},
+                ],
+            },
+        )
+        now = datetime.fromisoformat("2026-07-27T09:30:00+02:00")
+        early_end = datetime.fromisoformat("2026-07-27T10:00:00+02:00")
+        self.assertEqual(engine.active_slot(schedule, now)["id"], "mid")
+        self.assertEqual(engine.active_slot(schedule, early_end)["id"], "mid")
+        self.assertEqual(engine.next_timer_at(schedule, now).isoformat(), "2026-07-27T15:00:00+02:00")
+        self.assertEqual(
+            engine.active_slot(schedule, datetime.fromisoformat("2026-07-27T15:00:00+02:00"))["id"],
+            "day",
+        )
+
+    def test_next_timer_at_ignores_lone_slot_end(self) -> None:
+        schedule = engine.normalize_schedule(
+            "climate.salon",
+            {
+                "slots": [
+                    {"id": "morning", "day": "mon", "start": "07:00", "end": "09:00", "temperature": 21},
+                    {"id": "evening", "day": "mon", "start": "18:30", "end": "22:00", "temperature": 20},
+                ],
+            },
+        )
+        now = datetime.fromisoformat("2026-07-27T08:00:00+02:00")
+        at_end = datetime.fromisoformat("2026-07-27T09:00:00+02:00")
+        self.assertEqual(engine.active_slot(schedule, now)["id"], "morning")
+        self.assertIsNone(engine.active_slot(schedule, at_end))
+        self.assertEqual(engine.next_timer_at(schedule, now).isoformat(), "2026-07-27T18:30:00+02:00")
+
     def test_next_timer_at_includes_override_expiry(self) -> None:
         now = datetime.fromisoformat("2026-07-27T08:00:00+02:00")
         schedule = self._override_schedule("2026-07-27T10:00:00+02:00")
