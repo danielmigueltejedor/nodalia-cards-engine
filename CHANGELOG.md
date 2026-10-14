@@ -6,6 +6,10 @@
 
 - Replace the README header with the supplied Nodalia Cards Engine wordmark and the integration brand icon with its matching PNG, including a high-density variant. Preserve transparency and trim excess outer margins.
 
+### Fixed
+
+- Re-evaluate a weekly climate schedule when the active slot ends and a different enabled slot takes over, including a shorter slot that was covering an overnight slot from the previous day. A slot end that leaves no other slot active still waits for the next start.
+
 ## [3.0.0] - 2026-10-03
 
 Stable Engine release with WebSocket API v3, native forecast alerts and persistent advanced card capabilities. Companion frontend: Nodalia Cards `3.0.0-alpha.5`.
